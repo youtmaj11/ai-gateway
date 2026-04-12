@@ -3,12 +3,27 @@ mod cli;
 mod config;
 mod types;
 
-use axum::{routing::get, Router};
+use axum::{response::Json, routing::get, serve, Router};
 use clap::CommandFactory;
+use serde::Serialize;
 use std::net::SocketAddr;
+use tokio::net::TcpListener;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 use cli::{Cli, Commands, ToolsCommand};
+
+#[derive(Serialize)]
+struct HealthResponse {
+    status: &'static str,
+    version: &'static str,
+}
+
+async fn health_handler() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+    })
+}
 
 #[tokio::main]
 async fn main() {
@@ -18,15 +33,20 @@ async fn main() {
         .init();
 
     let cli = Cli::parse_args();
+    let config = config::Config::from_file(&cli.config).expect("failed to load configuration");
 
-    if cli.server {
-        let config = config::Config::from_file(&cli.config).expect("failed to load configuration");
-        let app = Router::<()>::new().route("/", get(|| async { "ai-gateway is running" }));
-
+    if cli.server || cli.command.is_none() {
+        let app = Router::new().route("/health", get(health_handler));
         let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-        tracing::info!(%addr, "starting ai-gateway server");
-        let _ = app;
-        tracing::info!(%addr, "server stub initialized");
+
+        tracing::info!(%addr, "starting ai-gateway HTTP server");
+        let listener = TcpListener::bind(addr)
+            .await
+            .expect("failed to bind health server");
+
+        serve(listener, app)
+            .await
+            .expect("server failed");
         return;
     }
 

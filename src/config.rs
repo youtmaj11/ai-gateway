@@ -1,13 +1,31 @@
 use serde::Deserialize;
 use std::env;
 
+fn default_port() -> u16 {
+    8080
+}
+
+fn default_string() -> String {
+    String::new()
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    #[serde(default = "default_port")]
     pub port: u16,
+    #[serde(default = "default_string")]
     pub database_url: String,
+    #[serde(default = "default_string")]
     pub redis_url: String,
+    #[serde(default = "default_string")]
     pub rabbitmq_url: String,
+    #[serde(default = "default_string")]
     pub ollama_url: String,
+    #[serde(default = "default_log_level")]
     pub log_level: String,
 }
 

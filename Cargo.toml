@@ -1,0 +1,24 @@
+[workspace]
+members = ["."]
+
+[package]
+name = "ai-gateway"
+version = "0.1.0"
+edition = "2021"
+authors = ["AI Gateway <developer@localhost>"]
+description = "Self-hosted offline-first AI orchestrator gateway"
+license = "MIT"
+repository = "https://github.com/youtmaj11/ai-gateway"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+tower = "0.4"
+tower-http = "0.5"
+clap = { version = "4.5", features = ["derive"] }
+config = "0.14"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"

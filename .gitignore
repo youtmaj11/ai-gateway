@@ -1,0 +1,23 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Sensitive configuration
+config.toml
+.env
+.env.*
+*.local
+
+# Editor and system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Database files
+*.sqlite
+*.db

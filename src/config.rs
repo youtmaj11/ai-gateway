@@ -12,9 +12,9 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, ::config::ConfigError> {
+    pub fn from_file(path: &str) -> Result<Self, ::config::ConfigError> {
         let settings = ::config::Config::builder()
-            .add_source(::config::File::with_name("config").required(false))
+            .add_source(::config::File::with_name(path).required(false))
             .add_source(::config::Environment::with_prefix("AI_GATEWAY").separator("_"));
 
         let settings = settings.build()?;

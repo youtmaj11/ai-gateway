@@ -11,14 +11,18 @@ license = "MIT"
 repository = "https://github.com/youtmaj11/ai-gateway"
 
 [dependencies]
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1.0", features = ["full"] }
 tower = "0.4"
-tower-http = "0.5"
+tower-http = { version = "0.5", features = ["trace"] }
 clap = { version = "4.5", features = ["derive"] }
 config = "0.14"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = "0.24"
+opentelemetry = "0.23"
+opentelemetry_sdk = "0.23"
+futures-util = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"

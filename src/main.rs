@@ -1,14 +1,16 @@
 mod agent;
 mod cli;
 mod config;
+mod observability;
 mod types;
 
-use axum::{response::Json, routing::get, serve, Router};
+use axum::{extract::ws::{Message, WebSocket, WebSocketUpgrade}, http::{Request, Response}, response::{IntoResponse, Json}, routing::get, serve, Router};
 use clap::CommandFactory;
 use serde::Serialize;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 use tokio::net::TcpListener;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tower_http::trace::TraceLayer;
+use tracing::{info, Span};
 
 use cli::{Cli, Commands, ToolsCommand};
 
@@ -25,21 +27,63 @@ async fn health_handler() -> Json<HealthResponse> {
     })
 }
 
+async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(handle_socket)
+}
+
+async fn handle_socket(mut socket: WebSocket) {
+    let span = tracing::info_span!("ws.connection");
+    let _enter = span.enter();
+    info!("WebSocket connection opened");
+
+    while let Some(Ok(msg)) = socket.recv().await {
+        match msg {
+            Message::Text(text) => {
+                info!(%text, "received websocket text");
+                if socket.send(Message::Text(format!("echo: {text}"))).await.is_err() {
+                    tracing::warn!("failed to send websocket response");
+                    break;
+                }
+            }
+            Message::Close(_) => {
+                info!("websocket close received");
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    info!("WebSocket connection closed");
+}
+
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(EnvFilter::from_default_env())
-        .init();
+    observability::init_tracing().expect("failed to initialize tracing");
 
     let cli = Cli::parse_args();
     let config = config::Config::from_file(&cli.config).expect("failed to load configuration");
 
     if cli.server || cli.command.is_none() {
-        let app = Router::new().route("/health", get(health_handler));
+        let trace_layer = TraceLayer::new_for_http()
+            .make_span_with(|request: &Request<_>| {
+                tracing::info_span!("http.request",
+                    method = %request.method(),
+                    path = %request.uri().path(),
+                )
+            })
+            .on_response(|response: &Response<_>, latency: Duration, span: &Span| {
+                span.record("status_code", &tracing::field::display(response.status().as_u16()));
+                info!(status = %response.status(), latency = ?latency, "request completed");
+            });
+
+        let app = Router::new()
+            .route("/health", get(health_handler))
+            .route("/ws", get(ws_handler))
+            .layer(trace_layer);
+
         let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
 
-        tracing::info!(%addr, "starting ai-gateway HTTP server");
+        info!(%addr, "starting ai-gateway HTTP server");
         let listener = TcpListener::bind(addr)
             .await
             .expect("failed to bind health server");

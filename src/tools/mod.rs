@@ -7,9 +7,11 @@ pub mod pdf_book_loader;
 pub mod shell_executor;
 pub mod web_search;
 pub mod code_helper;
+pub mod memory_recall;
 
 use code_helper::CodeHelperTool;
 use file_reader::FileReaderTool;
+use memory_recall::MemoryRecallTool;
 use pdf_book_loader::PdfBookLoaderTool;
 use shell_executor::ShellExecutorTool;
 use web_search::WebSearchTool;
@@ -58,6 +60,7 @@ impl ToolRegistry {
                 Box::new(ShellExecutorTool),
                 Box::new(WebSearchTool),
                 Box::new(CodeHelperTool),
+                Box::new(MemoryRecallTool),
             ],
         }
     }
@@ -151,5 +154,11 @@ mod tests {
     fn registered_tools_include_code_helper() {
         let tools = registered_tools();
         assert!(tools.contains(&"code_helper"));
+    }
+
+    #[test]
+    fn registered_tools_include_memory_recall() {
+        let tools = registered_tools();
+        assert!(tools.contains(&"memory_recall"));
     }
 }

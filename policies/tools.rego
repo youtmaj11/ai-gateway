@@ -1,12 +1,14 @@
 package tools
 
-default allow = false
+import rego.v1
 
-allow {
+default allow := false
+
+allow if {
     input.tool != "shell"
 }
 
-allow {
+allow if {
     input.tool == "shell"
     input.user.role == "admin"
 }

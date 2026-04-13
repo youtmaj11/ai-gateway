@@ -2,8 +2,6 @@
 
 pub mod opa;
 
-pub use opa::{PolicyEnforcer, PolicyError, UserContext};
-
 pub fn initialize() {
     // placeholder for policy initialization
 }

@@ -53,9 +53,7 @@ impl PolicyEnforcer {
             .set_input_json(&input.to_string())
             .map_err(|err| PolicyError::Eval(err.to_string()))?;
 
-        self.engine
-            .eval_allow_query("data.tools.allow".to_string(), false)
-            .map_err(|err| PolicyError::Eval(err.to_string()))
+        Ok(self.engine.eval_allow_query("data.tools.allow".to_string(), false))
     }
 }
 

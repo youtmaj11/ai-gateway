@@ -36,6 +36,17 @@ pub enum Commands {
 pub enum ToolsCommand {
     /// List available tools
     List,
+    /// Run a tool with policy authorization
+    Run {
+        /// Name of the tool to execute
+        tool: String,
+        /// User role used for authorization checks
+        #[arg(long, default_value = "developer")]
+        role: String,
+        /// Username used for tool tracking
+        #[arg(long, default_value = "cli_user")]
+        username: String,
+    },
 }
 
 impl Cli {

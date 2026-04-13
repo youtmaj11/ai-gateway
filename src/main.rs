@@ -146,6 +146,12 @@ async fn main() {
             println!("- pdf_loader");
             println!("- book_loader");
         }
+        Some(Commands::Tools { command: ToolsCommand::Run { tool, username, role } }) => {
+            match tools::run_tool(&tool, &username, &role).await {
+                Ok(result) => println!("{result}"),
+                Err(err) => eprintln!("Tool execution denied: {err}"),
+            }
+        }
         Some(Commands::Version) => {
             println!("ai-gateway {}", env!("CARGO_PKG_VERSION"));
         }

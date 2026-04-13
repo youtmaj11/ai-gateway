@@ -13,10 +13,11 @@ use axum::{extract::{Extension, Query, ws::{Message, WebSocket, WebSocketUpgrade
 use clap::CommandFactory;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, time::Duration};
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::mpsc};
 use tower_http::trace::TraceLayer;
 use tracing::{info, Span};
 
+use agent::core::AgentCore;
 use auth::jwt::JwtAuthLayer;
 use cli::{Cli, Commands, ToolsCommand};
 use storage::redis::RedisCache;
@@ -68,9 +69,18 @@ async fn handle_socket(mut socket: WebSocket) {
         match msg {
             Message::Text(text) => {
                 info!(%text, "received websocket text");
-                if socket.send(Message::Text(format!("echo: {text}"))).await.is_err() {
-                    tracing::warn!("failed to send websocket response");
-                    break;
+                let (tx, mut rx) = mpsc::unbounded_channel();
+                let prompt = text.clone();
+
+                tokio::spawn(async move {
+                    let _ = AgentCore::run_agent_stream(&prompt, tx).await;
+                });
+
+                while let Some(update) = rx.recv().await {
+                    if socket.send(Message::Text(update)).await.is_err() {
+                        tracing::warn!("failed to send websocket response");
+                        break;
+                    }
                 }
             }
             Message::Close(_) => {

@@ -3,6 +3,7 @@ use crate::storage::redis::RedisCache;
 use serde::Deserialize;
 use serde_json::json;
 use std::env;
+use tokio::sync::mpsc;
 
 /// Agent core helper functions for the CLI and future runtime.
 pub async fn run_chat(message: &str, mut cache: Option<&mut RedisCache>) -> String {
@@ -58,6 +59,65 @@ impl AgentCore {
         format!(
             "Agent stopped after {attempts} iterations. Conversation:\n{conversation}"
         )
+    }
+
+    pub async fn run_agent_stream(
+        prompt: &str,
+        sender: mpsc::UnboundedSender<String>,
+    ) -> String {
+        let mut conversation = format!("User: {prompt}\n");
+        let mut attempts = 0;
+
+        while attempts < 4 {
+            let step = attempts + 1;
+            let _ = sender.send(format!("Thinking: step {step} started"));
+
+            let query = Self::build_ollama_prompt(&conversation);
+            let _ = sender.send("Thinking: querying Ollama".to_string());
+
+            let reply = match Self::send_to_ollama(&query).await {
+                Ok(reply) => {
+                    let _ = sender.send(format!("Thinking: received Ollama response"));
+                    reply
+                }
+                Err(err) => {
+                    let error = format!("Agent error: {err}");
+                    let _ = sender.send(error.clone());
+                    return error;
+                }
+            };
+
+            match Self::parse_agent_response(&reply) {
+                AgentAction::ToolCall { tool_name, tool_input } => {
+                    let _ = sender.send(format!("Planning: call tool {tool_name}"));
+                    let tool_output = Self::execute_tool(&tool_name, &tool_input).await;
+                    let _ = sender.send(format!(
+                        "Tool result: {tool_name} => {tool_output}",
+                    ));
+
+                    conversation.push_str(&format!(
+                        "Tool call: {tool_name}\nInput: {tool_input}\nResult: {tool_output}\n",
+                    ));
+                }
+                AgentAction::FinalAnswer(answer) => {
+                    let _ = sender.send(format!("Final answer: {answer}"));
+                    return answer;
+                }
+                AgentAction::Unknown(raw) => {
+                    let result = format!("Final answer: {raw}");
+                    let _ = sender.send(result.clone());
+                    return result;
+                }
+            }
+
+            attempts += 1;
+        }
+
+        let final_message = format!(
+            "Agent stopped after {attempts} iterations. Conversation:\n{conversation}"
+        );
+        let _ = sender.send(final_message.clone());
+        final_message
     }
 
     async fn execute_tool(tool_name: &str, tool_input: &str) -> String {

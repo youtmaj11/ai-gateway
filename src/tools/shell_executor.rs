@@ -1,0 +1,94 @@
+use std::fmt;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::process::Command;
+use tokio::runtime::Builder;
+use tokio::time::timeout;
+
+#[derive(Debug)]
+pub enum ShellExecutorError {
+    DisallowedCommand(String),
+    Io(std::io::Error),
+    Timeout,
+    Execution(String),
+}
+
+impl fmt::Display for ShellExecutorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ShellExecutorError::DisallowedCommand(cmd) => {
+                write!(f, "disallowed command: {cmd}")
+            }
+            ShellExecutorError::Io(err) => write!(f, "I/O error: {err}"),
+            ShellExecutorError::Timeout => write!(f, "command timed out"),
+            ShellExecutorError::Execution(err) => write!(f, "execution error: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for ShellExecutorError {}
+
+impl From<std::io::Error> for ShellExecutorError {
+    fn from(error: std::io::Error) -> Self {
+        ShellExecutorError::Io(error)
+    }
+}
+
+pub struct ShellExecutorTool;
+
+impl ShellExecutorTool {
+    const ALLOWED_COMMANDS: [&'static str; 6] = ["echo", "ls", "pwd", "cat", "wc", "date"];
+
+    fn parse_params(params: &str) -> Result<(String, Vec<String>), ShellExecutorError> {
+        let mut parts = params.split_whitespace();
+        let command = parts
+            .next()
+            .ok_or_else(|| ShellExecutorError::Execution("missing command".to_string()))?
+            .to_string();
+        let args = parts.map(String::from).collect();
+
+        if !Self::ALLOWED_COMMANDS.contains(&command.as_str()) {
+            return Err(ShellExecutorError::DisallowedCommand(command));
+        }
+        Ok((command, args))
+    }
+
+    async fn execute_command(command: String, args: Vec<String>) -> Result<String, ShellExecutorError> {
+        let mut cmd = Command::new(command);
+        cmd.args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let output = timeout(Duration::from_secs(10), cmd.output())
+            .await
+            .map_err(|_| ShellExecutorError::Timeout)??;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Ok(format!("STDOUT:\n{}\nSTDERR:\n{}", stdout, stderr))
+    }
+}
+
+impl crate::tools::Tool for ShellExecutorTool {
+    fn name(&self) -> &'static str {
+        "shell_executor"
+    }
+
+    fn execute(&self, params: &str) -> String {
+        let result = match Self::parse_params(params) {
+            Ok((cmd, args)) => {
+                let runtime = Builder::new_current_thread().enable_all().build();
+                match runtime {
+                    Ok(rt) => rt.block_on(Self::execute_command(cmd, args)),
+                    Err(err) => Err(ShellExecutorError::Execution(err.to_string())),
+                }
+            }
+            Err(err) => Err(err),
+        };
+
+        match result {
+            Ok(output) => output,
+            Err(err) => format!("Error executing shell command: {err}"),
+        }
+    }
+}

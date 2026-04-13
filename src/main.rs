@@ -2,6 +2,7 @@ mod agent;
 mod cli;
 mod config;
 mod observability;
+mod storage;
 mod types;
 
 use axum::{extract::ws::{Message, WebSocket, WebSocketUpgrade}, http::{Request, Response}, response::{IntoResponse, Json}, routing::get, serve, Router};
@@ -13,6 +14,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, Span};
 
 use cli::{Cli, Commands, ToolsCommand};
+use storage::redis::RedisCache;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -63,6 +65,18 @@ async fn main() {
     let cli = Cli::parse_args();
     let config = config::Config::from_file(&cli.config).expect("failed to load configuration");
 
+    let mut cache = if !config.redis_url.is_empty() {
+        match RedisCache::new(&config.redis_url).await {
+            Ok(cache) => Some(cache),
+            Err(err) => {
+                tracing::warn!(%err, "failed to connect to redis, continuing without cache");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     if cli.server || cli.command.is_none() {
         let trace_layer = TraceLayer::new_for_http()
             .make_span_with(|request: &Request<_>| {
@@ -96,7 +110,7 @@ async fn main() {
 
     match cli.command {
         Some(Commands::Chat { message }) => {
-            let response = agent::core::run_chat(&message);
+            let response = agent::core::run_chat(&message, cache.as_mut()).await;
             println!("{response}");
         }
         Some(Commands::Tools { command: ToolsCommand::List }) => {

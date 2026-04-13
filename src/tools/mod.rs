@@ -97,6 +97,12 @@ pub async fn run_tool(
     }
 
     let registry = ToolRegistry::new();
+
+    if tool_name == "shell_executor" {
+        let output = ShellExecutorTool::execute_async(params).await;
+        return Ok(output);
+    }
+
     let tool = registry
         .get(tool_name)
         .ok_or_else(|| ToolExecutionError::ToolNotFound(tool_name.to_string()))?;

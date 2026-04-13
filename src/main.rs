@@ -1,20 +1,32 @@
 mod agent;
+mod auth;
 mod cli;
 mod config;
 mod observability;
 mod storage;
 mod types;
 
-use axum::{extract::ws::{Message, WebSocket, WebSocketUpgrade}, http::{Request, Response}, response::{IntoResponse, Json}, routing::get, serve, Router};
+use axum::{extract::{Extension, Query, ws::{Message, WebSocket, WebSocketUpgrade}}, http::{Request, Response}, response::{IntoResponse, Json}, routing::get, serve, Router};
 use clap::CommandFactory;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, time::Duration};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::{info, Span};
 
+use auth::jwt::JwtAuthLayer;
 use cli::{Cli, Commands, ToolsCommand};
 use storage::redis::RedisCache;
+
+#[derive(Deserialize)]
+struct ChatRequest {
+    message: String,
+}
+
+#[derive(Serialize)]
+struct ChatResponse {
+    response: String,
+}
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -31,6 +43,17 @@ async fn health_handler() -> Json<HealthResponse> {
 
 async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
+}
+
+async fn chat_handler(
+    Query(params): Query<ChatRequest>,
+    Extension(claims): Extension<auth::jwt::Claims>,
+) -> Json<ChatResponse> {
+    info!(%claims.sub, "authenticated chat request");
+
+    Json(ChatResponse {
+        response: format!("Authenticated agent response to: {}", params.message),
+    })
 }
 
 async fn handle_socket(mut socket: WebSocket) {
@@ -93,6 +116,7 @@ async fn main() {
         let app = Router::new()
             .route("/health", get(health_handler))
             .route("/ws", get(ws_handler))
+            .route("/chat", get(chat_handler).layer(JwtAuthLayer::new(config.jwt_secret.clone())))
             .layer(trace_layer);
 
         let addr = SocketAddr::from(([0, 0, 0, 0], config.port));

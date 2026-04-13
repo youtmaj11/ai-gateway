@@ -69,20 +69,10 @@ impl ShellExecutorTool {
     }
 }
 
-impl crate::tools::Tool for ShellExecutorTool {
-    fn name(&self) -> &'static str {
-        "shell_executor"
-    }
-
-    fn execute(&self, params: &str) -> String {
+impl ShellExecutorTool {
+    pub async fn execute_async(params: &str) -> String {
         let result = match Self::parse_params(params) {
-            Ok((cmd, args)) => {
-                let runtime = Builder::new_current_thread().enable_all().build();
-                match runtime {
-                    Ok(rt) => rt.block_on(Self::execute_command(cmd, args)),
-                    Err(err) => Err(ShellExecutorError::Execution(err.to_string())),
-                }
-            }
+            Ok((cmd, args)) => Self::execute_command(cmd, args).await,
             Err(err) => Err(err),
         };
 
@@ -90,5 +80,15 @@ impl crate::tools::Tool for ShellExecutorTool {
             Ok(output) => output,
             Err(err) => format!("Error executing shell command: {err}"),
         }
+    }
+}
+
+impl crate::tools::Tool for ShellExecutorTool {
+    fn name(&self) -> &'static str {
+        "shell_executor"
+    }
+
+    fn execute(&self, params: &str) -> String {
+        format!("ShellExecutorTool should be invoked through async run_tool; params={params}")
     }
 }

@@ -1,8 +1,11 @@
-use axum::body::Body;
+use axum::body::{Body, Bytes, HttpBody};
+use axum::extract::connect_info::ConnectInfo;
 use axum::http::{Request, Response, StatusCode};
+use crate::auth::jwt::Claims;
 use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, Client, RedisError};
 use std::future::Future;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -51,9 +54,11 @@ pub struct RateLimitMiddleware<S> {
     shared: Arc<RateLimitState>,
 }
 
-impl<S> Service<Request<Body>> for RateLimitMiddleware<S>
+impl<S, B> Service<Request<Body>> for RateLimitMiddleware<S>
 where
-    S: Service<Request<Body>, Response = Response<Body>> + Clone + Send + 'static,
+    S: Service<Request<Body>, Response = Response<B>> + Clone + Send + 'static,
+    B: HttpBody<Data = Bytes> + Send + 'static,
+    B::Error: Into<axum::BoxError>,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
 {
@@ -74,7 +79,8 @@ where
             match Self::check_rate_limit(shared, &key).await {
                 Ok(allowed) => {
                     if allowed {
-                        inner.call(req).await
+                        let response = inner.call(req).await?;
+                        Ok(response.map(Body::new))
                     } else {
                         let response = Response::builder()
                             .status(StatusCode::TOO_MANY_REQUESTS)
@@ -83,7 +89,10 @@ where
                         Ok(response)
                     }
                 }
-                Err(_) => inner.call(req).await,
+                Err(_) => {
+                    let response = inner.call(req).await?;
+                    Ok(response.map(Body::new))
+                }
             }
         })
     }
@@ -91,11 +100,33 @@ where
 
 impl<S> RateLimitMiddleware<S> {
     fn client_identifier(req: &Request<Body>) -> String {
-        req.headers()
-            .get("x-forwarded-for")
-            .and_then(|value| value.to_str().ok())
-            .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
-            .unwrap_or_else(|| "unknown".to_string())
+        if let Some(claims) = req.extensions().get::<Claims>() {
+            return format!("user:{}", claims.sub);
+        }
+
+        if let Some(header) = req.headers().get("x-forwarded-for") {
+            if let Ok(value) = header.to_str() {
+                let ip = value.split(',').next().unwrap_or(value).trim();
+                if !ip.is_empty() {
+                    return format!("ip:{}", ip);
+                }
+            }
+        }
+
+        if let Some(header) = req.headers().get("x-real-ip") {
+            if let Ok(value) = header.to_str() {
+                let ip = value.trim();
+                if !ip.is_empty() {
+                    return format!("ip:{}", ip);
+                }
+            }
+        }
+
+        if let Some(ConnectInfo(addr)) = req.extensions().get::<ConnectInfo<SocketAddr>>() {
+            return format!("ip:{}", addr.ip());
+        }
+
+        "unknown".to_string()
     }
 
     async fn check_rate_limit(shared: Arc<RateLimitState>, identifier: &str) -> Result<bool, RedisError> {
@@ -106,5 +137,46 @@ impl<S> RateLimitMiddleware<S> {
             let _: () = conn.expire(&key, shared.window_seconds as i64).await?;
         }
         Ok(count <= shared.limit)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{HeaderValue, Request};
+
+    #[test]
+    fn client_identifier_prefers_user_claims_over_ip() {
+        let mut request = Request::builder()
+            .uri("/")
+            .body(Body::empty())
+            .unwrap();
+
+        request.extensions_mut().insert(Claims {
+            sub: "user123".to_string(),
+            exp: 0,
+        });
+        request.headers_mut().insert(
+            "x-forwarded-for",
+            HeaderValue::from_static("192.0.2.1"),
+        );
+
+        assert_eq!(RateLimitMiddleware::<()>::client_identifier(&request), "user:user123");
+    }
+
+    #[test]
+    fn client_identifier_uses_x_forwarded_for_when_no_claims() {
+        let mut request = Request::builder()
+            .uri("/")
+            .body(Body::empty())
+            .unwrap();
+
+        request.headers_mut().insert(
+            "x-forwarded-for",
+            HeaderValue::from_static("192.0.2.1, 198.51.100.1"),
+        );
+
+        assert_eq!(RateLimitMiddleware::<()>::client_identifier(&request), "ip:192.0.2.1");
     }
 }

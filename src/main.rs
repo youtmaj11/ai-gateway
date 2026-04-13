@@ -15,7 +15,6 @@ use clap::CommandFactory;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, time::Duration};
 use tokio::{net::TcpListener, sync::mpsc};
-use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{info, Span};
 
@@ -134,14 +133,21 @@ async fn main() {
             .expect("failed to initialize rate limit middleware");
 
         let app = Router::new()
-            .route("/health", get(health_handler))
-            .route("/ws", get(ws_handler))
-            .route("/chat", get(chat_handler).layer(JwtAuthLayer::new(config.jwt_secret.clone())))
-            .layer(
-                ServiceBuilder::new()
-                    .layer(trace_layer)
-                    .layer(rate_limit_layer),
-            );
+            .route(
+                "/health",
+                get(health_handler).layer::<RateLimitLayer, std::convert::Infallible>(rate_limit_layer.clone()),
+            )
+            .route(
+                "/ws",
+                get(ws_handler).layer::<RateLimitLayer, std::convert::Infallible>(rate_limit_layer.clone()),
+            )
+            .route(
+                "/chat",
+                get(chat_handler)
+                    .layer::<RateLimitLayer, std::convert::Infallible>(rate_limit_layer.clone())
+                    .layer(JwtAuthLayer::new(config.jwt_secret.clone())),
+            )
+            .layer(trace_layer);
 
         let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
 
@@ -150,7 +156,9 @@ async fn main() {
             .await
             .expect("failed to bind health server");
 
-        serve(listener, app)
+        let service = app.into_make_service_with_connect_info::<SocketAddr>();
+
+        serve(listener, service)
             .await
             .expect("server failed");
         return;

@@ -3,7 +3,9 @@ mod auth;
 mod cli;
 mod config;
 mod observability;
+mod policy;
 mod storage;
+mod tools;
 mod types;
 
 use axum::{extract::{Extension, Query, ws::{Message, WebSocket, WebSocketUpgrade}}, http::{Request, Response}, response::{IntoResponse, Json}, routing::get, serve, Router};

@@ -6,7 +6,9 @@ pub mod file_reader;
 pub mod pdf_book_loader;
 pub mod shell_executor;
 pub mod web_search;
+pub mod code_helper;
 
+use code_helper::CodeHelperTool;
 use file_reader::FileReaderTool;
 use pdf_book_loader::PdfBookLoaderTool;
 use shell_executor::ShellExecutorTool;
@@ -55,6 +57,7 @@ impl ToolRegistry {
                 Box::new(PdfBookLoaderTool),
                 Box::new(ShellExecutorTool),
                 Box::new(WebSearchTool),
+                Box::new(CodeHelperTool),
             ],
         }
     }
@@ -142,5 +145,11 @@ mod tests {
     fn registered_tools_include_web_search() {
         let tools = registered_tools();
         assert!(tools.contains(&"web_search"));
+    }
+
+    #[test]
+    fn registered_tools_include_code_helper() {
+        let tools = registered_tools();
+        assert!(tools.contains(&"code_helper"));
     }
 }

@@ -2,6 +2,7 @@ mod agent;
 mod auth;
 mod cli;
 mod config;
+mod middleware;
 mod observability;
 mod policy;
 mod queue;
@@ -20,6 +21,7 @@ use tracing::{info, Span};
 use agent::core::AgentCore;
 use auth::jwt::JwtAuthLayer;
 use cli::{Cli, Commands, ToolsCommand};
+use middleware::rate_limit::RateLimitLayer;
 use storage::redis::RedisCache;
 
 #[derive(Deserialize)]
@@ -126,10 +128,25 @@ async fn main() {
                 info!(status = %response.status(), latency = ?latency, "request completed");
             });
 
+        let rate_limit_layer = RateLimitLayer::new(&config.redis_url, config.rate_limit, config.rate_limit_window)
+            .await
+            .expect("failed to initialize rate limit middleware");
+
         let app = Router::new()
-            .route("/health", get(health_handler))
-            .route("/ws", get(ws_handler))
-            .route("/chat", get(chat_handler).layer(JwtAuthLayer::new(config.jwt_secret.clone())))
+            .route(
+                "/health",
+                get(health_handler).layer::<RateLimitLayer, std::convert::Infallible>(rate_limit_layer.clone()),
+            )
+            .route(
+                "/ws",
+                get(ws_handler).layer::<RateLimitLayer, std::convert::Infallible>(rate_limit_layer.clone()),
+            )
+            .route(
+                "/chat",
+                get(chat_handler)
+                    .layer::<RateLimitLayer, std::convert::Infallible>(rate_limit_layer.clone())
+                    .layer(JwtAuthLayer::new(config.jwt_secret.clone())),
+            )
             .layer(trace_layer);
 
         let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
@@ -139,7 +156,9 @@ async fn main() {
             .await
             .expect("failed to bind health server");
 
-        serve(listener, app)
+        let service = app.into_make_service_with_connect_info::<SocketAddr>();
+
+        serve(listener, service)
             .await
             .expect("server failed");
         return;

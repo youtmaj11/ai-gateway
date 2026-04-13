@@ -3,7 +3,9 @@ mod auth;
 mod cli;
 mod config;
 mod observability;
+mod policy;
 mod storage;
+mod tools;
 mod types;
 
 use axum::{extract::{Extension, Query, ws::{Message, WebSocket, WebSocketUpgrade}}, http::{Request, Response}, response::{IntoResponse, Json}, routing::get, serve, Router};
@@ -143,6 +145,12 @@ async fn main() {
             println!("- file_reader");
             println!("- pdf_loader");
             println!("- book_loader");
+        }
+        Some(Commands::Tools { command: ToolsCommand::Run { tool, username, role } }) => {
+            match tools::run_tool(&tool, &username, &role).await {
+                Ok(result) => println!("{result}"),
+                Err(err) => eprintln!("Tool execution denied: {err}"),
+            }
         }
         Some(Commands::Version) => {
             println!("ai-gateway {}", env!("CARGO_PKG_VERSION"));

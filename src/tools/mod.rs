@@ -2,9 +2,14 @@ use crate::policy::opa::{PolicyEnforcer, UserContext, PolicyError};
 use std::fmt;
 use std::path::PathBuf;
 
+pub mod file_reader;
+
+use file_reader::FileReaderTool;
+
 /// Tool execution errors returned when an OPA policy denies action.
 #[derive(Debug)]
 pub enum ToolExecutionError {
+    ToolNotFound(String),
     PolicyDenied(String),
     PolicyError(PolicyError),
 }
@@ -18,6 +23,7 @@ impl From<PolicyError> for ToolExecutionError {
 impl fmt::Display for ToolExecutionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ToolExecutionError::ToolNotFound(message) => write!(f, "{message}"),
             ToolExecutionError::PolicyDenied(message) => write!(f, "{message}"),
             ToolExecutionError::PolicyError(err) => write!(f, "{err}"),
         }
@@ -26,24 +32,44 @@ impl fmt::Display for ToolExecutionError {
 
 impl std::error::Error for ToolExecutionError {}
 
-/// Execute a tool request after an OPA policy check.
-pub async fn execute_tool(
-    tool_name: &str,
-    user: &UserContext,
-    enforcer: &mut PolicyEnforcer,
-) -> Result<String, ToolExecutionError> {
-    if !enforcer.allow_tool(tool_name, user)? {
-        return Err(ToolExecutionError::PolicyDenied(format!(
-            "tool '{tool_name}' not allowed for user role '{user_role}'",
-            user_role = user.role
-        )));
+pub trait Tool {
+    fn name(&self) -> &'static str;
+    fn execute(&self, params: &str) -> String;
+}
+
+pub struct ToolRegistry {
+    tools: Vec<Box<dyn Tool + Send + Sync>>,
+}
+
+impl ToolRegistry {
+    pub fn new() -> Self {
+        Self {
+            tools: vec![Box::new(FileReaderTool)],
+        }
     }
 
-    Ok(format!("Executed tool: {tool_name}"))
+    pub fn get(&self, tool_name: &str) -> Option<&(dyn Tool + Send + Sync)> {
+        self.tools.iter().find_map(|tool| {
+            if tool.name() == tool_name {
+                Some(tool.as_ref())
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn names(&self) -> Vec<&'static str> {
+        self.tools.iter().map(|tool| tool.name()).collect()
+    }
 }
 
 /// Run a tool command with OPA authorization checks.
-pub async fn run_tool(tool_name: &str, username: &str, role: &str) -> Result<String, ToolExecutionError> {
+pub async fn run_tool(
+    tool_name: &str,
+    params: &str,
+    username: &str,
+    role: &str,
+) -> Result<String, ToolExecutionError> {
     let policy_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("policies/tools.rego");
     let mut enforcer = PolicyEnforcer::load_policy(policy_path)?;
 
@@ -52,7 +78,23 @@ pub async fn run_tool(tool_name: &str, username: &str, role: &str) -> Result<Str
         role: role.to_string(),
     };
 
-    execute_tool(tool_name, &user, &mut enforcer).await
+    if !enforcer.allow_tool(tool_name, &user)? {
+        return Err(ToolExecutionError::PolicyDenied(format!(
+            "tool '{tool_name}' not allowed for user role '{user_role}'",
+            user_role = user.role
+        )));
+    }
+
+    let registry = ToolRegistry::new();
+    let tool = registry
+        .get(tool_name)
+        .ok_or_else(|| ToolExecutionError::ToolNotFound(tool_name.to_string()))?;
+
+    Ok(tool.execute(params))
+}
+
+pub fn registered_tools() -> Vec<&'static str> {
+    ToolRegistry::new().names()
 }
 
 #[cfg(test)]

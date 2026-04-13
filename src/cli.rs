@@ -40,6 +40,9 @@ pub enum ToolsCommand {
     Run {
         /// Name of the tool to execute
         tool: String,
+        /// Parameters passed to the tool (for example a file path)
+        #[arg(long, default_value = "")]
+        params: String,
         /// User role used for authorization checks
         #[arg(long, default_value = "developer")]
         role: String,

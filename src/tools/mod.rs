@@ -8,9 +8,11 @@ pub mod shell_executor;
 pub mod web_search;
 pub mod code_helper;
 pub mod memory_recall;
+pub mod homelab_api;
 
 use code_helper::CodeHelperTool;
 use file_reader::FileReaderTool;
+use homelab_api::HomelabApiTool;
 use memory_recall::MemoryRecallTool;
 use pdf_book_loader::PdfBookLoaderTool;
 use shell_executor::ShellExecutorTool;
@@ -61,6 +63,7 @@ impl ToolRegistry {
                 Box::new(WebSearchTool),
                 Box::new(CodeHelperTool),
                 Box::new(MemoryRecallTool),
+                Box::new(HomelabApiTool),
             ],
         }
     }
@@ -154,5 +157,11 @@ mod tests {
     fn registered_tools_include_memory_recall() {
         let tools = registered_tools();
         assert!(tools.contains(&"memory_recall"));
+    }
+
+    #[test]
+    fn registered_tools_include_homelab_api() {
+        let tools = registered_tools();
+        assert!(tools.contains(&"homelab_api"));
     }
 }

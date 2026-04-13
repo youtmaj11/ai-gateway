@@ -4,6 +4,7 @@ mod cli;
 mod config;
 mod observability;
 mod policy;
+mod queue;
 mod storage;
 mod tools;
 mod types;

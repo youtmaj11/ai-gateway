@@ -3,8 +3,10 @@ use std::fmt;
 use std::path::PathBuf;
 
 pub mod file_reader;
+pub mod pdf_book_loader;
 
 use file_reader::FileReaderTool;
+use pdf_book_loader::PdfBookLoaderTool;
 
 /// Tool execution errors returned when an OPA policy denies action.
 #[derive(Debug)]
@@ -44,7 +46,7 @@ pub struct ToolRegistry {
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
-            tools: vec![Box::new(FileReaderTool)],
+            tools: vec![Box::new(FileReaderTool), Box::new(PdfBookLoaderTool)],
         }
     }
 
@@ -103,14 +105,20 @@ mod tests {
 
     #[tokio::test]
     async fn shell_tool_allowed_for_admin() {
-        let result = run_tool("shell", "admin_user", "admin").await;
+        let result = run_tool("shell", "", "admin", "admin_user").await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Executed tool: shell");
     }
 
     #[tokio::test]
     async fn shell_tool_denied_for_non_admin() {
-        let result = run_tool("shell", "developer_user", "developer").await;
+        let result = run_tool("shell", "", "developer", "developer_user").await;
         assert!(matches!(result, Err(ToolExecutionError::PolicyDenied(_))));
+    }
+
+    #[test]
+    fn registered_tools_include_pdf_book_loader() {
+        let tools = registered_tools();
+        assert!(tools.contains(&"pdf_book_loader"));
     }
 }

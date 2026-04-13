@@ -43,8 +43,9 @@ impl FileReaderTool {
         let document = Document::load(path)?;
         let mut text = String::new();
 
-        for page_id in document.get_pages().values() {
-            if let Ok(page_text) = document.extract_text(&[page_id.0]) {
+        let pages = document.get_pages();
+        for page_number in 1..=pages.len() as u32 {
+            if let Ok(page_text) = document.extract_text(&[page_number]) {
                 if !page_text.is_empty() {
                     text.push_str(&page_text);
                     text.push('\n');

@@ -2,6 +2,7 @@ mod agent;
 mod auth;
 mod cli;
 mod config;
+mod middleware;
 mod observability;
 mod policy;
 mod queue;
@@ -14,12 +15,14 @@ use clap::CommandFactory;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, time::Duration};
 use tokio::{net::TcpListener, sync::mpsc};
+use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{info, Span};
 
 use agent::core::AgentCore;
 use auth::jwt::JwtAuthLayer;
 use cli::{Cli, Commands, ToolsCommand};
+use middleware::rate_limit::RateLimitLayer;
 use storage::redis::RedisCache;
 
 #[derive(Deserialize)]
@@ -126,11 +129,19 @@ async fn main() {
                 info!(status = %response.status(), latency = ?latency, "request completed");
             });
 
+        let rate_limit_layer = RateLimitLayer::new(&config.redis_url, config.rate_limit, config.rate_limit_window)
+            .await
+            .expect("failed to initialize rate limit middleware");
+
         let app = Router::new()
             .route("/health", get(health_handler))
             .route("/ws", get(ws_handler))
             .route("/chat", get(chat_handler).layer(JwtAuthLayer::new(config.jwt_secret.clone())))
-            .layer(trace_layer);
+            .layer(
+                ServiceBuilder::new()
+                    .layer(trace_layer)
+                    .layer(rate_limit_layer),
+            );
 
         let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
 

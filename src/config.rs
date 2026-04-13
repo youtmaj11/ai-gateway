@@ -13,6 +13,14 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
+fn default_rate_limit() -> u32 {
+    100
+}
+
+fn default_rate_limit_window() -> u64 {
+    60
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default = "default_port")]
@@ -31,6 +39,10 @@ pub struct Config {
     pub homelab_url: String,
     #[serde(default = "default_string")]
     pub homelab_jwt: String,
+    #[serde(default = "default_rate_limit")]
+    pub rate_limit: u32,
+    #[serde(default = "default_rate_limit_window")]
+    pub rate_limit_window: u64,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }

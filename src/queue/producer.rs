@@ -44,6 +44,10 @@ impl RabbitProducer {
         Ok(Self { channel })
     }
 
+    pub async fn connect_from_config(config_url: &str) -> Result<Self, QueueError> {
+        Self::connect(config_url).await
+    }
+
     pub async fn publish_task(&self, task: &str) -> Result<(), QueueError> {
         let confirmation = self
             .channel

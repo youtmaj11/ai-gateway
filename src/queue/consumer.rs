@@ -56,6 +56,10 @@ impl RabbitConsumer {
         Ok(Self { _connection: connection, channel, consumer })
     }
 
+    pub async fn connect_from_config(config_url: &str) -> Result<Self, QueueError> {
+        Self::connect(config_url).await
+    }
+
     pub async fn receive_task(&mut self) -> Option<Result<Delivery, QueueError>> {
         self.consumer.next().await.map(|delivery| delivery.map_err(QueueError::from))
     }

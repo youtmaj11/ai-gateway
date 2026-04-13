@@ -4,9 +4,11 @@ use std::path::PathBuf;
 
 pub mod file_reader;
 pub mod pdf_book_loader;
+pub mod shell_executor;
 
 use file_reader::FileReaderTool;
 use pdf_book_loader::PdfBookLoaderTool;
+use shell_executor::ShellExecutorTool;
 
 /// Tool execution errors returned when an OPA policy denies action.
 #[derive(Debug)]
@@ -46,7 +48,11 @@ pub struct ToolRegistry {
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
-            tools: vec![Box::new(FileReaderTool), Box::new(PdfBookLoaderTool)],
+            tools: vec![
+                Box::new(FileReaderTool),
+                Box::new(PdfBookLoaderTool),
+                Box::new(ShellExecutorTool),
+            ],
         }
     }
 
@@ -120,5 +126,6 @@ mod tests {
     fn registered_tools_include_pdf_book_loader() {
         let tools = registered_tools();
         assert!(tools.contains(&"pdf_book_loader"));
+        assert!(tools.contains(&"shell_executor"));
     }
 }

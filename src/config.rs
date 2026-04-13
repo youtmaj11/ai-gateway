@@ -27,6 +27,10 @@ pub struct Config {
     pub rabbitmq_url: String,
     #[serde(default = "default_string")]
     pub ollama_url: String,
+    #[serde(default = "default_string")]
+    pub homelab_url: String,
+    #[serde(default = "default_string")]
+    pub homelab_jwt: String,
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }

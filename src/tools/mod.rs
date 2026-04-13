@@ -5,10 +5,12 @@ use std::path::PathBuf;
 pub mod file_reader;
 pub mod pdf_book_loader;
 pub mod shell_executor;
+pub mod web_search;
 
 use file_reader::FileReaderTool;
 use pdf_book_loader::PdfBookLoaderTool;
 use shell_executor::ShellExecutorTool;
+use web_search::WebSearchTool;
 
 /// Tool execution errors returned when an OPA policy denies action.
 #[derive(Debug)]
@@ -52,6 +54,7 @@ impl ToolRegistry {
                 Box::new(FileReaderTool),
                 Box::new(PdfBookLoaderTool),
                 Box::new(ShellExecutorTool),
+                Box::new(WebSearchTool),
             ],
         }
     }
@@ -127,5 +130,11 @@ mod tests {
         let tools = registered_tools();
         assert!(tools.contains(&"pdf_book_loader"));
         assert!(tools.contains(&"shell_executor"));
+    }
+
+    #[test]
+    fn registered_tools_include_web_search() {
+        let tools = registered_tools();
+        assert!(tools.contains(&"web_search"));
     }
 }

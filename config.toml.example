@@ -3,6 +3,7 @@
 port = 8080
 database_url = "postgres://user:password@localhost:5432/ai_gateway"
 redis_url = "redis://localhost:6379"
+jwt_secret = "your_jwt_secret_here"
 rabbitmq_url = "amqp://guest:guest@localhost:5672"
 ollama_url = "http://localhost:11434"
 log_level = "info"

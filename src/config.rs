@@ -22,6 +22,8 @@ pub struct Config {
     #[serde(default = "default_string")]
     pub redis_url: String,
     #[serde(default = "default_string")]
+    pub jwt_secret: String,
+    #[serde(default = "default_string")]
     pub rabbitmq_url: String,
     #[serde(default = "default_string")]
     pub ollama_url: String,

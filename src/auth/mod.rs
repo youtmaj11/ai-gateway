@@ -1,4 +1,4 @@
-// JWT validation middleware and authentication helpers
+pub mod jwt;
 
 pub fn initialize() {
     // placeholder for auth middleware setup

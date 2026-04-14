@@ -3,8 +3,8 @@
 port = 8080
 storage_backend = "sqlite"
 encryption_key = ""
-queue_backend = "in_memory"
-database_url = "sqlite:ai_gateway.db"
+queue_backend = "inmemory"
+database_url = "ai_gateway.db"
 
 # Define agent roles for orchestration
 agents = [

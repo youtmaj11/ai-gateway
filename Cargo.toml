@@ -45,3 +45,7 @@ rand_core = "0.6"
 tokio-postgres = { version = "0.7", features = ["with-uuid-0_8"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1.4", features = ["v4"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "2.1"

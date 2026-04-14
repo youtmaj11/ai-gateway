@@ -84,7 +84,7 @@ async fn handle_socket(mut socket: WebSocket, config: config::Config) {
                 });
 
                 while let Some(update) = rx.recv().await {
-                    if socket.send(Message::Text(update)).await.is_err() {
+                    if socket.send(Message::Text(update.into())).await.is_err() {
                         tracing::warn!("failed to send websocket response");
                         break;
                     }

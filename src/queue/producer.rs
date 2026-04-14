@@ -14,7 +14,7 @@ impl RabbitProducer {
 
         channel
             .queue_declare(
-                Self::QUEUE_NAME,
+                Self::QUEUE_NAME.into(),
                 QueueDeclareOptions::default(),
                 FieldTable::default(),
             )
@@ -31,8 +31,8 @@ impl RabbitProducer {
         let confirmation = self
             .channel
             .basic_publish(
-                "",
-                Self::QUEUE_NAME,
+                "".into(),
+                Self::QUEUE_NAME.into(),
                 BasicPublishOptions::default(),
                 task.as_bytes(),
                 BasicProperties::default(),

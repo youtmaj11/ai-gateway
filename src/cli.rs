@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use indicatif::{ProgressBar, ProgressStyle};
+use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(name = "ai-gateway")]
@@ -55,5 +57,25 @@ pub enum ToolsCommand {
 impl Cli {
     pub fn parse_args() -> Self {
         Cli::parse()
+    }
+}
+
+pub struct CliProgress;
+
+impl CliProgress {
+    pub fn spinner(message: impl Into<String>) -> ProgressBar {
+        let bar = ProgressBar::new_spinner();
+        bar.set_message(message.into());
+        bar.set_style(
+            ProgressStyle::with_template("{spinner:.green} {msg}")
+                .unwrap()
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
+        );
+        bar.enable_steady_tick(Duration::from_millis(80));
+        bar
+    }
+
+    pub fn done(bar: ProgressBar, message: impl Into<String>) {
+        bar.finish_with_message(message.into());
     }
 }

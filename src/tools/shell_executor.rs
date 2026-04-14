@@ -37,7 +37,21 @@ impl From<std::io::Error> for ShellExecutorError {
 pub struct ShellExecutorTool;
 
 impl ShellExecutorTool {
-    const ALLOWED_COMMANDS: [&'static str; 6] = ["echo", "ls", "pwd", "cat", "wc", "date"];
+    const ALLOWED_COMMANDS: [&'static str; 6] = ["echo", "pwd", "date", "whoami", "uname", "uptime"];
+
+    fn is_safe_arg(arg: &str) -> bool {
+        !arg.contains('/')
+            && !arg.contains('\'')
+            && !arg.contains('|')
+            && !arg.contains('&')
+            && !arg.contains(';')
+            && !arg.contains('>')
+            && !arg.contains('<')
+            && !arg.contains('$')
+            && !arg.contains('`')
+            && !arg.contains('\n')
+            && !arg.contains('\r')
+    }
 
     fn parse_params(params: &str) -> Result<(String, Vec<String>), ShellExecutorError> {
         let mut parts = params.split_whitespace();
@@ -45,19 +59,31 @@ impl ShellExecutorTool {
             .next()
             .ok_or_else(|| ShellExecutorError::Execution("missing command".to_string()))?
             .to_string();
-        let args = parts.map(String::from).collect();
+        let args: Vec<String> = parts.map(String::from).collect();
 
         if !Self::ALLOWED_COMMANDS.contains(&command.as_str()) {
             return Err(ShellExecutorError::DisallowedCommand(command));
         }
+
+        if !command.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            return Err(ShellExecutorError::DisallowedCommand(command));
+        }
+
+        if args.iter().any(|arg| !Self::is_safe_arg(arg)) {
+            return Err(ShellExecutorError::Execution("disallowed argument detected".to_string()));
+        }
+
         Ok((command, args))
     }
 
     async fn execute_command(command: String, args: Vec<String>) -> Result<String, ShellExecutorError> {
         let mut cmd = Command::new(command);
         cmd.args(&args)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .current_dir("/tmp");
 
         let output = timeout(Duration::from_secs(10), cmd.output())
             .await

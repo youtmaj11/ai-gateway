@@ -120,6 +120,29 @@ Important sections:
 - `jwt_secret`: required for authenticated chat endpoints
 - `rate_limit` and `rate_limit_window`
 
+### Multi-Agent Role Examples
+
+AI Gateway supports configurable agent orchestration with named roles.
+A common setup is to split responsibilities across planner, executor, and reviewer agents.
+
+Example configuration:
+
+```toml
+agents = [
+  { name = "planner", role = "planner", description = "Creates task plans and delegates execution." },
+  { name = "executor", role = "executor", description = "Executes plans and returns results." },
+  { name = "reviewer", role = "reviewer", description = "Validates outputs and approves or revises results." },
+]
+```
+
+This pattern lets you express workflows such as:
+
+1. `planner` generates a plan from the user prompt.
+2. `executor` carries out the plan using tools.
+3. `reviewer` checks the output and suggests revisions or approvals.
+
+Use the agent `role` values in your runtime orchestration logic to route prompts, tool calls, and review steps.
+
 ## How to Add a New Tool
 
 Adding a new tool is intentionally simple.

@@ -119,6 +119,16 @@ async fn main() {
         None
     };
 
+    let mut queue = if cli.server || cli.command.is_none() {
+        None
+    } else {
+        Some(
+            queue::create_queue(&config)
+                .await
+                .expect("failed to initialize queue backend"),
+        )
+    };
+
     if cli.server || cli.command.is_none() {
         let trace_layer = TraceLayer::new_for_http()
             .make_span_with(|request: &Request<_>| {
@@ -170,7 +180,8 @@ async fn main() {
 
     match cli.command {
         Some(Commands::Chat { message }) => {
-            let response = agent::core::run_chat(&message, cache.as_mut()).await;
+            let queue_ref = queue.as_ref().expect("queue backend was not initialized").as_ref();
+            let response = agent::core::run_chat(&message, cache.as_mut(), queue_ref).await;
             println!("{response}");
         }
         Some(Commands::Tools { command: ToolsCommand::List }) => {

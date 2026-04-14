@@ -1,21 +1,54 @@
 # AI Gateway
 
-AI Gateway is a self-hosted, offline-first AI orchestrator built in Rust.
-It combines a rich CLI, optional WebSocket server mode, configurable agent orchestration, tool execution, policy enforcement, storage backends, and local installation support.
+AI Gateway is a self-hosted, offline-first AI orchestration platform built in Rust.
+It enables secure local AI workflows by combining CLI-driven task orchestration, tool execution, configurable multi-agent roles, and Open Policy Agent enforcement.
 
 ## Features
 
-- Local-first AI orchestration with a CLI-first experience
-- Configurable multi-agent roles and workflows
-- Tool execution with Open Policy Agent (OPA) enforcement
-- Optional WebSocket server for real-time streaming
-- Configurable storage: SQLite default, PostgreSQL optional
+- Multi-agent orchestration with planner/reviewer/executor role configuration
+- CLI-first operation with optional WebSocket server mode
+- Secure tool execution via centralized registry and policy enforcement
+- Configurable storage backends: SQLite default, PostgreSQL optional
 - Optional queue backends: in-memory default, RabbitMQ optional
-- Secure tool execution and age encryption for sensitive data
+- Local install support with idempotent bootstrap script
+- Release-optimized build profile for fast startup and smaller binaries
 
-## Quick Start
+## Architecture
 
-### 1. Install locally
+```mermaid
+flowchart TD
+  CLI[CLI / Server Client] -->|HTTP & WebSocket| Server[Axum Server]
+  Server --> Auth[JWT Authentication]
+  Server --> Policy[OPA Policy Enforcement]
+  Server --> Agent[Agent Orchestration]
+  Server --> Queue[Queue Backend]
+  Server --> Storage[Storage Backend]
+  Server --> Observability[Tracing & Telemetry]
+
+  Agent --> Tools[Tool Registry]
+  Tools --> Shell[Shell Executor]
+  Tools --> FileReader[File Reader]
+  Tools --> WebSearch[Web Search]
+  Tools --> MemoryRecall[Memory Recall]
+
+  subgraph Backends
+    Queue
+    Storage
+  end
+```
+
+The architecture is designed for local-first deployments, with a Rust backend that minimizes external dependencies while enabling flexible automation workflows.
+
+## Installation
+
+### Prerequisites
+
+- Rust toolchain (`rustup`, `cargo`)
+- `openssl` development libraries
+- `pkg-config`
+- Optional: Docker for containerized scans
+
+### Local install
 
 Run the idempotent installer:
 
@@ -26,106 +59,90 @@ Run the idempotent installer:
 This script:
 
 - installs Ollama if missing
-- creates `config/` and `config.toml`
-- leaves existing files intact when re-run
+- creates the `config/` folder
+- preserves existing files on re-run
 
-### 2. Review the default config
+### Build from source
 
-Copy or open `config.toml` and adjust values for your environment.
-
-```bash
-cp config.toml.example config.toml
-```
-
-### 3. Build the project
+For development builds:
 
 ```bash
 cargo build
 ```
 
-### 4. Run the CLI
+For optimized release builds:
 
-Send a chat message with the CLI:
+```bash
+cargo build --release
+strip target/release/ai-gateway
+```
+
+### Make targets
+
+- `make build`: development build
+- `make release`: release build
+- `make strip`: strip symbols from the release binary
+- `make audit`: run `cargo audit`
+- `make trivy`: run Trivy configuration scan
+
+## Quick Start
+
+### Configure the app
+
+Copy the example configuration and update values:
+
+```bash
+cp config.toml.example config.toml
+```
+
+Edit `config.toml` for your environment, including `jwt_secret`, `redis_url`, and tool endpoint settings.
+
+### Run the CLI
+
+Send a chat prompt:
 
 ```bash
 cargo run -- chat "What can you do?"
 ```
 
-Run a tool with authorization:
+Execute a tool with role-based authorization:
 
 ```bash
 cargo run -- tools run shell --params "echo hello" --role admin --username cli_user
 ```
 
-Start the server mode:
+### Run server mode
+
+Start the HTTP/WebSocket server:
 
 ```bash
 cargo run -- --server
 ```
 
-Then connect to `/ws` for WebSocket-based streaming.
-
-## Architecture
-
-```mermaid
-flowchart TD
-  CLI[CLI] -->|HTTP/WebSocket| Server[Axum Server]
-  Server --> Auth[JWT Auth Layer]
-  Server --> Policy[OPA Policy Enforcement]
-  Server --> Queue[Queue Backend]
-  Server --> Storage[Storage Backend]
-  Server --> Observability[OpenTelemetry / Tracing]
-  Server --> Agent[Agent Orchestration]
-  Agent --> Tools[Tool Registry]
-  Tools --> Shell[Shell Executor]
-  Tools --> FileReader[File Reader]
-  Tools --> WebSearch[Web Search]
-  Tools --> MemoryRecall[Memory Recall]
-```
-
-## Local Installation and Usage
-
-### CLI mode
-
-The CLI is the primary interaction mode.
-Use `cargo run -- --help` to see available commands.
-
-Example:
-
-```bash
-cargo run -- tools list
-cargo run -- tools run web_search --params "rust async" --role developer --username alice
-```
-
-### Server mode
-
-The server exposes:
-
-- `GET /health` for health checks
-- `GET /ws` for WebSocket streaming
-- `GET /chat` for authenticated chat requests
-
-Use `config.toml` to configure `redis_url`, `jwt_secret`, and rate limits.
+Then connect to `/ws` for streaming responses.
 
 ## Configuration
 
-The default configuration is defined in `config.toml.example`.
+The default runtime configuration is defined in `config.toml.example`.
 
-Important sections:
+Important fields:
 
 - `storage_backend`: `sqlite` or `postgres`
 - `queue_backend`: `in_memory` or `rabbitmq`
-- `agents`: agent names, roles, and descriptions
-- `redis_url`: optional Redis endpoint
-- `jwt_secret`: required for authenticated chat endpoints
-- `rate_limit` and `rate_limit_window`
+- `agents`: named agent roles for orchestration
+- `redis_url`: optional cache and rate limiter backend
+- `jwt_secret`: required for authenticated endpoints
+- `rate_limit`, `rate_limit_window`: request throttling settings
 
-### Multi-Agent Role Examples
+### Multi-Agent Role Example
 
-AI Gateway supports configurable agent orchestration with named roles.
-A common setup is to split responsibilities across planner, reviewer, and executor agents.
+AI Gateway supports configurable agent pipelines. A common pattern is:
 
-Example configuration:
+- `planner` – creates a plan from a user prompt
+- `executor` – executes the plan using tools
+- `reviewer` – validates outputs and approves revisions
+
+Example:
 
 ```toml
 agents = [
@@ -135,84 +152,49 @@ agents = [
 ]
 ```
 
-This pattern lets you express workflows such as:
+This role-based configuration enables flexible orchestration and clearer separation of responsibilities in complex workflows.
 
-1. `planner` generates a plan from the user prompt.
-2. `executor` carries out the plan using tools.
-3. `reviewer` checks the output and suggests revisions or approvals.
+## Tools and Policies
 
-Use the agent `role` values in your runtime orchestration logic to route prompts, tool calls, and review steps.
+Tools are registered in the centralized tool registry and executed through the runtime layer.
 
-## How to Add a New Tool
+- `Shell Executor`: safely runs shell commands under policy control
+- `File Reader`: loads and parses local files
+- `Web Search`: performs online searches
+- `Memory Recall`: retrieves historical conversation data
 
-Adding a new tool is intentionally simple.
-Follow these steps:
+Open Policy Agent (`policies/tools.rego`) defines authorization rules for tool access and helps prevent unauthorized actions.
 
-1. Create the tool implementation
+## Developer Guide
 
-   - Add a new Rust file under `src/tools/`, for example `src/tools/my_tool.rs`.
-   - Implement the `Tool` trait:
+### Project layout
 
-     ```rust
-     use crate::tools::Tool;
-
-     pub struct MyTool;
-
-     impl Tool for MyTool {
-         fn name(&self) -> &'static str {
-             "my_tool"
-         }
-
-         fn execute(&self, params: &str) -> String {
-             format!("Executed my_tool with: {}", params)
-         }
-     }
-     ```
-
-2. Register the tool
-
-   - Update `src/tools/registry.rs`
-   - Import the new tool and add it to `ToolRegistry::default()`
-
-3. Add policy rules (if the tool needs authorization)
-
-   - Update `policies/tools.rego`
-   - Add rules for the new tool name and allowed roles
-
-4. Add docs and tests
-
-   - Document usage in this README or a tool-specific README section
-   - Add unit tests in `src/tools/mod.rs` or `src/tools/<tool>_tests.rs`
-
-5. Verify end-to-end behavior
-
-   - Run `cargo test`
-   - Use the CLI to execute the tool:
-
-     ```bash
-     cargo run -- tools run my_tool --params "hello" --role developer --username alice
-     ```
-
-## Contributing
-
-- Keep changes small and focused
-- Write tests for new behavior
-- Preserve the existing structure and naming conventions
-- Document any new tools, config fields, or deployment features
-
-## Project Layout
-
-Key files:
-
-- `src/main.rs`: entrypoint for CLI and server mode
-- `src/cli.rs`: CLI definitions and progress handling
-- `src/config.rs`: config parsing and defaults
-- `src/agent/core.rs`: orchestration and agent loop
+- `src/main.rs`: application entrypoint and runtime bootstrapping
+- `src/cli.rs`: CLI argument parsing and command dispatch
+- `src/config.rs`: configuration parsing and defaults
+- `src/agent/core.rs`: agent orchestration and role handling
 - `src/tools/registry.rs`: tool registration and lookup
-- `src/policy/opa.rs`: OPA policy enforcement
-- `installer.sh`: idempotent local install helper
-- `config.toml.example`: default runtime configuration
+- `src/policy/opa.rs`: policy enforcement integration
+- `installer.sh`: idempotent local installation helper
+- `config.toml.example`: runtime config template
 
-## Contact
+### Testing
 
-This project is intended for local, self-hosted AI orchestration. Contributions and documentation improvements are welcome.
+Run the full Rust test suite:
+
+```bash
+cargo test
+```
+
+### Contribution
+
+- Keep changes small and incremental
+- Add tests for new behavior
+- Document new configuration and tool behavior
+- Preserve the existing architecture and naming conventions
+
+When submitting a pull request, include a short summary of the feature and any relevant usage examples.
+
+## License
+
+MIT

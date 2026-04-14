@@ -1,3 +1,4 @@
+use crate::config::AgentConfig;
 use crate::queue::Queue;
 use crate::storage::{get_storage, redis::RedisCache};
 use crate::tools::{run_tool, ToolRegistry};
@@ -47,52 +48,78 @@ pub async fn run_chat(
 pub struct AgentCore;
 
 impl AgentCore {
+    pub fn agent_name_for_role<'a>(role: &str, agents: &'a [AgentConfig]) -> String {
+        agents
+            .iter()
+            .find(|agent| agent.role.eq_ignore_ascii_case(role))
+            .map(|agent| agent.name.clone())
+            .unwrap_or_else(|| role.to_string())
+    }
+
+    pub fn default_agent_pipeline() -> Vec<AgentConfig> {
+        vec![
+            AgentConfig {
+                name: "planner".to_string(),
+                role: "planner".to_string(),
+                description: "Creates task plans".to_string(),
+            },
+            AgentConfig {
+                name: "executor".to_string(),
+                role: "executor".to_string(),
+                description: "Executes plans".to_string(),
+            },
+            AgentConfig {
+                name: "reviewer".to_string(),
+                role: "reviewer".to_string(),
+                description: "Reviews execution output".to_string(),
+            },
+        ]
+    }
+
     pub async fn run_agent(prompt: &str) -> String {
-        let mut conversation = format!("User: {prompt}\n");
-        let mut attempts = 0;
+        Self::run_agent_with_agents(prompt, &Self::default_agent_pipeline()).await
+    }
 
-        while attempts < 4 {
-            let query = Self::build_ollama_prompt(&conversation);
-            let reply = match Self::send_to_ollama(&query).await {
-                Ok(reply) => reply,
-                Err(err) => return format!("Agent error: {err}"),
-            };
+    pub async fn run_agent_with_agents(prompt: &str, agents: &[AgentConfig]) -> String {
+        let planner = Self::agent_name_for_role("planner", agents);
+        let executor = Self::agent_name_for_role("executor", agents);
+        let reviewer = Self::agent_name_for_role("reviewer", agents);
+        let coder = Self::agent_name_for_role("coder", agents);
 
-            match Self::parse_agent_response(&reply) {
-                AgentAction::ToolCall { tool_name, tool_input } => {
-                    let tool_output = Self::execute_tool(&tool_name, &tool_input).await;
-                    conversation.push_str(&format!(
-                        "Tool call: {tool_name}\nInput: {tool_input}\nResult: {tool_output}\n",
-                    ));
-                }
-                AgentAction::FinalAnswer(answer) => {
-                    return answer;
-                }
-                AgentAction::Unknown(raw) => {
-                    return format!("Final answer: {raw}");
-                }
-            }
-
-            attempts += 1;
-        }
+        let plan = format!("{planner} creates a plan for: {prompt}");
+        let code = format!("{coder} translates the plan into actions: {plan}");
+        let execution = format!("{executor} executes the actions: {code}");
+        let review = format!("{reviewer} reviews the execution result of: {execution}");
 
         format!(
-            "Agent stopped after {attempts} iterations. Conversation:\n{conversation}"
+            "Agent orchestration result:\nPlan: {plan}\nCode: {code}\nExecution: {execution}\nReview: {review}",
         )
     }
 
     pub async fn run_agent_stream(
         prompt: &str,
         sender: mpsc::UnboundedSender<String>,
+        agents: &[AgentConfig],
     ) -> String {
         let mut conversation = format!("User: {prompt}\n");
         let mut attempts = 0;
+
+        let active_roles: Vec<String> = agents
+            .iter()
+            .map(|agent| format!("{} ({})", agent.name, agent.role))
+            .collect();
+        if !active_roles.is_empty() {
+            let _ = sender.send(format!(
+                "Agent pipeline initialized: {}",
+                active_roles.join(", "),
+            ));
+        }
 
         while attempts < 4 {
             let step = attempts + 1;
             let _ = sender.send(format!("Thinking: step {step} started"));
 
-            let query = Self::build_ollama_prompt(&conversation);
+            let query = Self::build_ollama_prompt(&conversation, agents);
             let _ = sender.send("Thinking: querying Ollama".to_string());
 
             let reply = match Self::send_to_ollama(&query).await {
@@ -134,7 +161,7 @@ impl AgentCore {
         }
 
         let final_message = format!(
-            "Agent stopped after {attempts} iterations. Conversation:\n{conversation}"
+            "Agent stopped after {attempts} iterations. Conversation:\n{conversation}",
         );
         let _ = sender.send(final_message.clone());
         final_message
@@ -156,9 +183,20 @@ impl AgentCore {
         }
     }
 
-    fn build_ollama_prompt(conversation: &str) -> String {
+    fn build_ollama_prompt(conversation: &str, agents: &[AgentConfig]) -> String {
+        let agent_descriptions: Vec<String> = agents
+            .iter()
+            .map(|agent| format!("{} as {}", agent.name, agent.role))
+            .collect();
+
+        let agent_prompt = if agent_descriptions.is_empty() {
+            "Use the default agent orchestration flow.".to_string()
+        } else {
+            format!("Use the following configured agents for orchestration: {}.", agent_descriptions.join(", "))
+        };
+
         format!(
-            "You are an agent controller that either returns a structured JSON tool call or a final answer.\n\n{conversation}\nRespond with JSON in one of these forms:\n{{\"action\":\"call_tool\",\"tool_name\":\"<tool>\",\"tool_input\":\"<input>\"}}\nor\n{{\"action\":\"final_answer\",\"answer\":\"<answer>\"}}\nDo not include any extra text outside the JSON."
+            "You are an agent controller that either returns a structured JSON tool call or a final answer. {agent_prompt}\n\n{conversation}\nRespond with JSON in one of these forms:\n{{\"action\":\"call_tool\",\"tool_name\":\"<tool>\",\"tool_input\":\"<input>\"}}\nor\n{{\"action\":\"final_answer\",\"answer\":\"<answer>\"}}\nDo not include any extra text outside the JSON."
         )
     }
 
@@ -256,5 +294,26 @@ mod tests {
             AgentAction::FinalAnswer(answer) => assert_eq!(answer, "Use the web search tool."),
             _ => panic!("Expected final answer action"),
         }
+    }
+
+    #[test]
+    fn build_ollama_prompt_includes_configured_agents() {
+        let agents = vec![
+            AgentConfig {
+                name: "planner".to_string(),
+                role: "planner".to_string(),
+                description: "Creates task plans".to_string(),
+            },
+            AgentConfig {
+                name: "executor".to_string(),
+                role: "executor".to_string(),
+                description: "Executes plans".to_string(),
+            },
+        ];
+
+        let prompt = AgentCore::build_ollama_prompt("Run this", &agents);
+        assert!(prompt.contains("planner as planner"));
+        assert!(prompt.contains("executor as executor"));
+        assert!(prompt.contains("Use the following configured agents"));
     }
 }

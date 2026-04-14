@@ -5,6 +5,13 @@ storage_backend = "sqlite"
 encryption_key = ""
 queue_backend = "in_memory"
 database_url = "sqlite:ai_gateway.db"
+
+# Define agent roles for orchestration
+agents = [
+  { name = "planner", role = "planner", description = "Creates task plans." },
+  { name = "executor", role = "executor", description = "Carries out plans." },
+  { name = "reviewer", role = "reviewer", description = "Reviews execution results." },
+]
 redis_url = "redis://localhost:6379"
 jwt_secret = "your_jwt_secret_here"
 rabbitmq_url = "amqp://guest:guest@localhost:5672"

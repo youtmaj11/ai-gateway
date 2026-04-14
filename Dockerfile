@@ -15,7 +15,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-RUN groupadd --system app && useradd --system --gid app --home-dir /nonexistent --shell /usr/sbin/nologin app
+RUN groupadd --system --gid 1000 app && \
+    useradd --system --uid 1000 --gid app --home-dir /nonexistent --shell /usr/sbin/nologin app
 
 WORKDIR /usr/local/bin
 

@@ -7,11 +7,11 @@ queue_backend = "in_memory"
 database_url = "ai_gateway.db"
 
 # Define agent roles for orchestration
-# Example multi-agent pipeline: planner -> executor -> reviewer
+# Example multi-agent role set: planner, reviewer, executor
 agents = [
   { name = "planner", role = "planner", description = "Creates task plans and delegates execution." },
-  { name = "executor", role = "executor", description = "Executes plans and returns results." },
   { name = "reviewer", role = "reviewer", description = "Validates outputs and approves or revises results." },
+  { name = "executor", role = "executor", description = "Executes plans and returns results." },
 ]
 redis_url = "redis://localhost:6379"
 jwt_secret = "your_jwt_secret_here"

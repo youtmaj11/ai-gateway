@@ -123,15 +123,15 @@ Important sections:
 ### Multi-Agent Role Examples
 
 AI Gateway supports configurable agent orchestration with named roles.
-A common setup is to split responsibilities across planner, executor, and reviewer agents.
+A common setup is to split responsibilities across planner, reviewer, and executor agents.
 
 Example configuration:
 
 ```toml
 agents = [
   { name = "planner", role = "planner", description = "Creates task plans and delegates execution." },
-  { name = "executor", role = "executor", description = "Executes plans and returns results." },
   { name = "reviewer", role = "reviewer", description = "Validates outputs and approves or revises results." },
+  { name = "executor", role = "executor", description = "Executes plans and returns results." },
 ]
 ```
 

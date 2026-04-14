@@ -20,8 +20,7 @@ RUN groupadd --system --gid 1000 app && \
 
 WORKDIR /usr/local/bin
 
-COPY --from=builder /usr/src/ai-gateway/target/release/ai-gateway ./ai-gateway
-RUN chown app:app ./ai-gateway
+COPY --from=builder --chown=app:app /usr/src/ai-gateway/target/release/ai-gateway ./ai-gateway
 
 USER app
 

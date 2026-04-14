@@ -103,6 +103,10 @@ async fn main() {
     let cli = Cli::parse_args();
     let config = config::Config::from_file(&cli.config).expect("failed to load configuration");
 
+    storage::initialize_storage(&config)
+        .await
+        .expect("failed to initialize storage backend");
+
     let mut cache = if !config.redis_url.is_empty() {
         match RedisCache::new(&config.redis_url).await {
             Ok(cache) => Some(cache),

@@ -21,7 +21,7 @@ use tracing::{info, Span};
 
 use agent::core::AgentCore;
 use auth::jwt::JwtAuthLayer;
-use cli::{Cli, Commands, ToolsCommand};
+use cli::{Cli, CliProgress, Commands, ToolsCommand};
 use middleware::rate_limit::RateLimitLayer;
 use storage::redis::RedisCache;
 
@@ -187,19 +187,30 @@ async fn main() {
     match cli.command {
         Some(Commands::Chat { message }) => {
             let queue_ref = queue.as_ref().expect("queue backend was not initialized").as_ref();
+            let spinner = CliProgress::spinner("Thinking through your request...");
             let response = agent::core::run_chat(&message, cache.as_mut(), queue_ref).await;
-            println!("{response}");
+            CliProgress::done(spinner, "Chat completed");
+            println!("\n{response}");
         }
         Some(Commands::Tools { command: ToolsCommand::List }) => {
+            let spinner = CliProgress::spinner("Loading available tools...");
+            let tools_list = tools::registered_tools();
+            CliProgress::done(spinner, "Tools loaded");
             println!("Available tools:");
-            for tool in tools::registered_tools() {
-                println!("- {tool}");
+            for tool in tools_list {
+                println!("  • {tool}");
             }
         }
         Some(Commands::Tools { command: ToolsCommand::Run { tool, params, username, role } }) => {
+            let spinner = CliProgress::spinner(format!("Running tool '{tool}' as {role}..."));
             match tools::run_tool(&tool, &params, &username, &role).await {
-                Ok(result) => println!("{result}"),
-                Err(err) => eprintln!("Tool execution denied: {err}"),
+                Ok(result) => {
+                    CliProgress::done(spinner, format!("Tool '{tool}' completed"));
+                    println!("\n{result}");
+                }
+                Err(err) => {
+                    spinner.abandon_with_message(format!("Tool '{tool}' failed: {err}"));
+                }
             }
         }
         Some(Commands::Version) => {

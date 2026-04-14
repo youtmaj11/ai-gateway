@@ -1,7 +1,7 @@
 use crate::config::AgentConfig;
 use crate::queue::Queue;
 use crate::storage::{get_storage, redis::RedisCache};
-use crate::tools::{run_tool, ToolRegistry};
+use crate::tools::ToolRegistry;
 use serde::Deserialize;
 use serde_json::json;
 use std::env;

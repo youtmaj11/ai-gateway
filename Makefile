@@ -1,9 +1,15 @@
-.PHONY: all build audit trivy security
+.PHONY: all build release strip audit trivy security
 
 all: build
 
 build:
 	cargo build
+
+release:
+	cargo build --release
+
+strip:
+	strip target/release/ai-gateway
 
 audit:
 	cargo audit

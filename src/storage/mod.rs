@@ -4,7 +4,6 @@ pub mod sqlite;
 
 use async_trait::async_trait;
 use once_cell::sync::OnceCell;
-use sqlx::Row;
 use std::{fmt, sync::Arc};
 
 use crate::config::{Config, StorageBackend};
@@ -17,7 +16,7 @@ static GLOBAL_STORAGE: OnceCell<Arc<dyn Storage>> = OnceCell::new();
 
 #[derive(Debug)]
 pub enum StorageError {
-    Sqlx(sqlx::Error),
+    Database(String),
     Encryption(String),
     AlreadyInitialized,
 }
@@ -25,7 +24,7 @@ pub enum StorageError {
 impl fmt::Display for StorageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StorageError::Sqlx(err) => write!(f, "storage error: {err}"),
+            StorageError::Database(err) => write!(f, "storage error: {err}"),
             StorageError::Encryption(err) => write!(f, "storage encryption error: {err}"),
             StorageError::AlreadyInitialized => write!(f, "storage backend already initialized"),
         }
@@ -34,9 +33,15 @@ impl fmt::Display for StorageError {
 
 impl std::error::Error for StorageError {}
 
-impl From<sqlx::Error> for StorageError {
-    fn from(err: sqlx::Error) -> Self {
-        StorageError::Sqlx(err)
+impl From<tokio_postgres::Error> for StorageError {
+    fn from(err: tokio_postgres::Error) -> Self {
+        StorageError::Database(err.to_string())
+    }
+}
+
+impl From<rusqlite::Error> for StorageError {
+    fn from(err: rusqlite::Error) -> Self {
+        StorageError::Database(err.to_string())
     }
 }
 
@@ -82,24 +87,4 @@ pub trait Storage: Send + Sync {
         user_message: &str,
         assistant_response: &str,
     ) -> Result<(), StorageError>;
-}
-
-impl<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> for ConversationRecord {
-    fn from_row(row: &'r sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
-        Ok(Self {
-            user_message: row.try_get("user_message")?,
-            assistant_response: row.try_get("assistant_response")?,
-            created_at: row.try_get("created_at")?,
-        })
-    }
-}
-
-impl<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> for ConversationRecord {
-    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
-        Ok(Self {
-            user_message: row.try_get("user_message")?,
-            assistant_response: row.try_get("assistant_response")?,
-            created_at: row.try_get("created_at")?,
-        })
-    }
 }

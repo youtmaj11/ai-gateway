@@ -1,7 +1,7 @@
 use futures_util::future::BoxFuture;
 use opentelemetry::{global, trace::TracerProvider};
-use opentelemetry_sdk::export::trace::{ExportResult, SpanData, SpanExporter};
-use opentelemetry_sdk::trace::TracerProvider as SdkTracerProvider;
+use opentelemetry_sdk::error::OTelSdkResult;
+use opentelemetry_sdk::trace::{SdkTracerProvider, SpanData, SpanExporter};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use tracing_opentelemetry::OpenTelemetryLayer;
 
@@ -9,7 +9,7 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 struct StdoutExporter;
 
 impl SpanExporter for StdoutExporter {
-    fn export(&mut self, batch: Vec<SpanData>) -> BoxFuture<'static, ExportResult> {
+    fn export(&self, batch: Vec<SpanData>) -> BoxFuture<'static, OTelSdkResult> {
         Box::pin(async move {
             for span in batch {
                 println!(
@@ -29,10 +29,7 @@ pub fn init_tracing() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .build();
 
     global::set_tracer_provider(provider.clone());
-    let tracer = provider
-        .tracer_builder("ai-gateway")
-        .with_version(env!("CARGO_PKG_VERSION"))
-        .build();
+    let tracer = provider.tracer("ai-gateway");
 
     let otel_layer = OpenTelemetryLayer::new(tracer);
 

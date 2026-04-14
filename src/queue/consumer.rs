@@ -17,7 +17,7 @@ impl RabbitConsumer {
 
         channel
             .queue_declare(
-                Self::QUEUE_NAME,
+                Self::QUEUE_NAME.into(),
                 QueueDeclareOptions::default(),
                 FieldTable::default(),
             )
@@ -25,8 +25,8 @@ impl RabbitConsumer {
 
         let consumer = channel
             .basic_consume(
-                Self::QUEUE_NAME,
-                "ai_gateway_consumer",
+                Self::QUEUE_NAME.into(),
+                "ai_gateway_consumer".into(),
                 BasicConsumeOptions::default(),
                 FieldTable::default(),
             )

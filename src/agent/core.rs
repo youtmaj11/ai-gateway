@@ -1,6 +1,6 @@
 use crate::queue::Queue;
+use crate::storage::{get_storage, redis::RedisCache};
 use crate::tools::{run_tool, ToolRegistry};
-use crate::storage::redis::RedisCache;
 use serde::Deserialize;
 use serde_json::json;
 use std::env;
@@ -30,6 +30,12 @@ pub async fn run_chat(
         },
         Err(err) => format!("Queue error: {err}"),
     };
+
+    if let Some(storage) = get_storage() {
+        let _ = storage
+            .save_conversation(&message, &queued_response)
+            .await;
+    }
 
     if let Some(cache) = cache.as_mut() {
         let _ = cache.set(&key, &queued_response, 60).await;

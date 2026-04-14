@@ -1,4 +1,4 @@
-use crate::tools::{code_helper::CodeHelperTool, file_reader::FileReaderTool, homelab_api::HomelabApiTool, memory_recall::MemoryRecallTool, pdf_book_loader::PdfBookLoaderTool, shell_executor::ShellExecutorTool, web_search::WebSearchTool, Tool};
+use crate::tools::{code_helper::CodeHelperTool, file_reader::FileReaderTool, homelab_api::HomelabApiTool, memory_recall::MemoryRecallTool, pdf_book_loader::PdfBookLoaderTool, shell_executor::ShellExecutorTool, web_search::WebSearchTool, run_tool, Tool, ToolExecutionError};
 
 pub struct ToolRegistry {
     tools: Vec<Box<dyn Tool + Send + Sync>>,
@@ -52,5 +52,16 @@ impl ToolRegistry {
 
     pub fn names(&self) -> Vec<&'static str> {
         self.tools.iter().map(|tool| tool.name()).collect()
+    }
+
+    /// Execute a tool with policy enforcement via OPA.
+    pub async fn execute_with_policy(
+        &self,
+        tool_name: &str,
+        params: &str,
+        username: &str,
+        role: &str,
+    ) -> Result<String, ToolExecutionError> {
+        run_tool(tool_name, params, username, role).await
     }
 }

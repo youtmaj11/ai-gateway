@@ -1,7 +1,7 @@
 use crate::config::AgentConfig;
 use crate::queue::Queue;
 use crate::storage::{get_storage, redis::RedisCache};
-use crate::tools::{run_tool, ToolRegistry};
+use crate::tools::ToolRegistry;
 use serde::Deserialize;
 use serde_json::json;
 use std::env;
@@ -168,18 +168,14 @@ impl AgentCore {
     }
 
     async fn execute_tool(tool_name: &str, tool_input: &str) -> String {
-        if tool_name == "shell_executor" {
-            match run_tool(tool_name, tool_input, "agent", "admin").await {
-                Ok(result) => result,
-                Err(err) => format!("tool execution failed: {err}"),
-            }
-        } else {
-            let registry = ToolRegistry::default();
+        let registry = ToolRegistry::default();
 
-            match registry.get(tool_name) {
-                Some(tool) => tool.execute(tool_input),
-                None => format!("tool not found: {tool_name}"),
-            }
+        match registry
+            .execute_with_policy(tool_name, tool_input, "agent", "admin")
+            .await
+        {
+            Ok(result) => result,
+            Err(err) => format!("tool execution failed: {err}"),
         }
     }
 

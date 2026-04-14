@@ -111,7 +111,7 @@ impl ShellExecutorTool {
 
 impl crate::tools::Tool for ShellExecutorTool {
     fn name(&self) -> &'static str {
-        "shell_executor"
+        "shell"
     }
 
     fn execute(&self, params: &str) -> String {

@@ -70,7 +70,7 @@ pub async fn run_tool(
 
     let registry = registry::ToolRegistry::default();
 
-    if tool_name == "shell_executor" {
+    if tool_name == "shell" || tool_name == "shell_executor" {
         let output = ShellExecutorTool::execute_async(params).await;
         return Ok(output);
     }
@@ -80,6 +80,16 @@ pub async fn run_tool(
         .ok_or_else(|| ToolExecutionError::ToolNotFound(tool_name.to_string()))?;
 
     Ok(tool.execute(params))
+}
+
+/// Execute a named tool through the registry while enforcing OPA policies.
+pub async fn execute_tool_with_policy(
+    tool_name: &str,
+    params: &str,
+    username: &str,
+    role: &str,
+) -> Result<String, ToolExecutionError> {
+    run_tool(tool_name, params, username, role).await
 }
 
 pub fn registered_tools() -> Vec<&'static str> {
@@ -92,14 +102,16 @@ mod tests {
 
     #[tokio::test]
     async fn shell_tool_allowed_for_admin() {
-        let result = run_tool("shell", "", "admin", "admin_user").await;
+        let result = run_tool("shell", "echo hello", "admin_user", "admin").await;
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "Executed tool: shell");
+        let output = result.unwrap();
+        assert!(output.contains("STDOUT:"));
+        assert!(output.contains("hello"));
     }
 
     #[tokio::test]
     async fn shell_tool_denied_for_non_admin() {
-        let result = run_tool("shell", "", "developer", "developer_user").await;
+        let result = run_tool("shell", "", "developer_user", "developer").await;
         assert!(matches!(result, Err(ToolExecutionError::PolicyDenied(_))));
     }
 
@@ -107,7 +119,7 @@ mod tests {
     fn registered_tools_include_pdf_book_loader() {
         let tools = registered_tools();
         assert!(tools.contains(&"pdf_book_loader"));
-        assert!(tools.contains(&"shell_executor"));
+        assert!(tools.contains(&"shell"));
     }
 
     #[test]

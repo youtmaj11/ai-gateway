@@ -147,7 +147,7 @@ impl AgentCore {
                 Err(err) => format!("tool execution failed: {err}"),
             }
         } else {
-            let registry = ToolRegistry::new();
+            let registry = ToolRegistry::default();
 
             match registry.get(tool_name) {
                 Some(tool) => tool.execute(tool_input),

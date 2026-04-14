@@ -9,14 +9,9 @@ pub mod web_search;
 pub mod code_helper;
 pub mod memory_recall;
 pub mod homelab_api;
+pub mod registry;
 
-use code_helper::CodeHelperTool;
-use file_reader::FileReaderTool;
-use homelab_api::HomelabApiTool;
-use memory_recall::MemoryRecallTool;
-use pdf_book_loader::PdfBookLoaderTool;
 use shell_executor::ShellExecutorTool;
-use web_search::WebSearchTool;
 
 /// Tool execution errors returned when an OPA policy denies action.
 #[derive(Debug)]
@@ -49,39 +44,7 @@ pub trait Tool {
     fn execute(&self, params: &str) -> String;
 }
 
-pub struct ToolRegistry {
-    tools: Vec<Box<dyn Tool + Send + Sync>>,
-}
-
-impl ToolRegistry {
-    pub fn new() -> Self {
-        Self {
-            tools: vec![
-                Box::new(FileReaderTool),
-                Box::new(PdfBookLoaderTool),
-                Box::new(ShellExecutorTool),
-                Box::new(WebSearchTool),
-                Box::new(CodeHelperTool),
-                Box::new(MemoryRecallTool),
-                Box::new(HomelabApiTool),
-            ],
-        }
-    }
-
-    pub fn get(&self, tool_name: &str) -> Option<&(dyn Tool + Send + Sync)> {
-        self.tools.iter().find_map(|tool| {
-            if tool.name() == tool_name {
-                Some(tool.as_ref())
-            } else {
-                None
-            }
-        })
-    }
-
-    pub fn names(&self) -> Vec<&'static str> {
-        self.tools.iter().map(|tool| tool.name()).collect()
-    }
-}
+pub use registry::ToolRegistry;
 
 /// Run a tool command with OPA authorization checks.
 pub async fn run_tool(
@@ -105,7 +68,7 @@ pub async fn run_tool(
         )));
     }
 
-    let registry = ToolRegistry::new();
+    let registry = registry::ToolRegistry::default();
 
     if tool_name == "shell_executor" {
         let output = ShellExecutorTool::execute_async(params).await;
@@ -120,7 +83,7 @@ pub async fn run_tool(
 }
 
 pub fn registered_tools() -> Vec<&'static str> {
-    ToolRegistry::new().names()
+    registry::ToolRegistry::default().names()
 }
 
 #[cfg(test)]

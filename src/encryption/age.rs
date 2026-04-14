@@ -1,4 +1,4 @@
-use age::{armor::{ArmoredReader, ArmoredWriter}, Decryptor, Encryptor, DecryptError, EncryptError, secrecy::SecretString};
+use age::{armor::{self, ArmoredReader, ArmoredWriter}, Decryptor, Encryptor, DecryptError, EncryptError, secrecy::SecretString};
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -19,7 +19,8 @@ pub enum EncryptionError {
 impl fmt::Display for EncryptionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EncryptionError::Age(err) => write!(f, "age encryption error: {err}"),
+            EncryptionError::Encrypt(err) => write!(f, "age encryption error: {err}"),
+            EncryptionError::Decrypt(err) => write!(f, "age decryption error: {err}"),
             EncryptionError::Io(err) => write!(f, "IO error: {err}"),
             EncryptionError::Utf8(err) => write!(f, "UTF-8 error: {err}"),
             EncryptionError::MissingKey => write!(f, "missing encryption key"),
@@ -66,7 +67,7 @@ impl AgeEncryption {
         let passphrase = SecretString::new(self.key.clone().unwrap());
         let encryptor = Encryptor::with_user_passphrase(passphrase);
         let mut output = Vec::new();
-        let mut armor = ArmoredWriter::new(&mut output);
+        let mut armor = ArmoredWriter::wrap_output(&mut output, armor::Format::AsciiArmor)?;
         let mut writer = encryptor.wrap_output(&mut armor)?;
         writer.write_all(plaintext.as_bytes())?;
         writer.finish()?;

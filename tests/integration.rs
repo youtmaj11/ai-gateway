@@ -1,3 +1,4 @@
+use assert_cmd::Command;
 use predicates::prelude::*;
 use std::env;
 use std::fs;
@@ -103,4 +104,30 @@ fn full_agent_loop_with_mock_ollama_and_shell_tool() {
         .stdout(predicate::str::contains("Final answer: integration complete"));
 
     server_handle.join().expect("mock server thread exited");
+}
+
+#[test]
+fn cli_tool_run_invokes_shell_tool_with_config_and_role() {
+    let temp_dir = env::temp_dir().join(format!("ai-gateway-integration-{}", Uuid::new_v4()));
+    fs::create_dir_all(&temp_dir).expect("create temp dir");
+    let config_path = write_config(&temp_dir, "http://127.0.0.1:12345");
+
+    let mut cmd = Command::cargo_bin("ai-gateway").expect("binary exists");
+    cmd.arg("--config")
+        .arg(&config_path)
+        .arg("tools")
+        .arg("run")
+        .arg("shell")
+        .arg("--params")
+        .arg("echo hello")
+        .arg("--role")
+        .arg("admin")
+        .arg("--username")
+        .arg("integration_user")
+        .timeout(Duration::from_secs(30));
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("STDOUT:"))
+        .stdout(predicate::str::contains("hello"));
 }

@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: ai-gateway
   namespace: ai-gateway
+  labels:
+    app: ai-gateway
 spec:
   replicas: 1
   selector:
@@ -23,6 +25,24 @@ spec:
           image: ai-gateway:v0.1.0
           ports:
             - containerPort: 8080
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-secret
+                  key: database_url
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-secret
+                  key: rabbitmq_url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ai-gateway-secret
+                  key: jwt_secret
           resources:
             requests:
               cpu: 100m

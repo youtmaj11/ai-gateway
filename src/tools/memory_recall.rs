@@ -1,8 +1,6 @@
-use sqlx::postgres::PgPoolOptions;
-use sqlx::Row;
-use std::env;
 use std::fmt;
 
+use crate::storage::{get_storage, ConversationRecord};
 use crate::tools::Tool;
 
 #[derive(Debug)]
@@ -24,18 +22,7 @@ impl std::error::Error for MemoryRecallError {}
 
 pub struct MemoryRecallTool;
 
-struct ConversationRecord {
-    user_message: String,
-    assistant_response: String,
-    created_at: String,
-}
-
 impl MemoryRecallTool {
-    fn database_url() -> Result<String, MemoryRecallError> {
-        env::var("AI_GATEWAY_DATABASE_URL")
-            .map_err(|err| MemoryRecallError::Request(err.to_string()))
-    }
-
     fn parse_params(params: &str) -> (String, Option<String>) {
         let trimmed = params.trim();
         if let Some((keyword, since_part)) = trimmed.rsplit_once(" since:") {
@@ -51,39 +38,14 @@ impl MemoryRecallTool {
         search: &str,
         since: Option<String>,
     ) -> Result<Vec<ConversationRecord>, MemoryRecallError> {
-        let database_url = Self::database_url()?;
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect(&database_url)
+        let storage = get_storage().ok_or_else(|| {
+            MemoryRecallError::Request("storage backend is not initialized".to_string())
+        })?;
+
+        let records = storage
+            .query_history(search, since)
             .await
             .map_err(|err| MemoryRecallError::Request(err.to_string()))?;
-
-        let mut query = String::from(
-            "SELECT user_message, assistant_response, created_at::text AS created_at FROM conversations \
-             WHERE (user_message ILIKE $1 OR assistant_response ILIKE $1)",
-        );
-
-        if since.is_some() {
-            query.push_str(" AND created_at >= $2");
-        }
-
-        query.push_str(" ORDER BY created_at DESC LIMIT 8");
-
-        let search_pattern = format!("%{}%", search);
-        let records = if let Some(since_dt) = since {
-            sqlx::query_as::<_, ConversationRecord>(&query)
-                .bind(search_pattern)
-                .bind(since_dt)
-                .fetch_all(&pool)
-                .await
-                .map_err(|err| MemoryRecallError::Request(err.to_string()))?
-        } else {
-            sqlx::query_as::<_, ConversationRecord>(&query)
-                .bind(search_pattern)
-                .fetch_all(&pool)
-                .await
-                .map_err(|err| MemoryRecallError::Request(err.to_string()))?
-        };
 
         Ok(records)
     }
@@ -105,16 +67,6 @@ impl MemoryRecallTool {
         }
         output.push_str("Return this information to the agent as relevant context.");
         output
-    }
-}
-
-impl<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> for ConversationRecord {
-    fn from_row(row: &'r sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
-        Ok(Self {
-            user_message: row.try_get("user_message")?,
-            assistant_response: row.try_get("assistant_response")?,
-            created_at: row.try_get("created_at")?,
-        })
     }
 }
 

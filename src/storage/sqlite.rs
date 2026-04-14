@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 use crate::storage::{ConversationRecord, Storage, StorageError};
-use sqlx::postgres::{PgPool, PgPoolOptions};
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 
-pub struct PostgresStorage {
-    pool: PgPool,
+pub struct SqliteStorage {
+    pool: SqlitePool,
 }
 
-impl PostgresStorage {
+impl SqliteStorage {
     pub async fn new(database_url: &str) -> Result<Self, StorageError> {
-        let pool = PgPoolOptions::new()
+        let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect(database_url)
             .await?;
@@ -18,19 +18,19 @@ impl PostgresStorage {
 }
 
 #[async_trait]
-impl Storage for PostgresStorage {
+impl Storage for SqliteStorage {
     async fn query_history(
         &self,
         search: &str,
         since: Option<String>,
     ) -> Result<Vec<ConversationRecord>, StorageError> {
         let mut query = String::from(
-            "SELECT user_message, assistant_response, created_at::text AS created_at FROM conversations \
-             WHERE (user_message ILIKE $1 OR assistant_response ILIKE $1)",
+            "SELECT user_message, assistant_response, created_at FROM conversations \
+             WHERE (user_message LIKE ?1 OR assistant_response LIKE ?1)",
         );
 
         if since.is_some() {
-            query.push_str(" AND created_at >= $2");
+            query.push_str(" AND created_at >= ?2");
         }
 
         query.push_str(" ORDER BY created_at DESC LIMIT 8");

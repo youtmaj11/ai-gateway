@@ -2,6 +2,7 @@
 
 port = 8080
 storage_backend = "sqlite"
+queue_backend = "in_memory"
 database_url = "sqlite:ai_gateway.db"
 redis_url = "redis://localhost:6379"
 jwt_secret = "your_jwt_secret_here"

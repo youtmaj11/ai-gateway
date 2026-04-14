@@ -1,3 +1,4 @@
+use crate::queue::Queue;
 use crate::tools::{run_tool, ToolRegistry};
 use crate::storage::redis::RedisCache;
 use serde::Deserialize;
@@ -6,7 +7,11 @@ use std::env;
 use tokio::sync::mpsc;
 
 /// Agent core helper functions for the CLI and future runtime.
-pub async fn run_chat(message: &str, mut cache: Option<&mut RedisCache>) -> String {
+pub async fn run_chat(
+    message: &str,
+    mut cache: Option<&mut RedisCache>,
+    queue: &(dyn Queue + Send + Sync),
+) -> String {
     let key = format!("chat:{}", message);
 
     if let Some(cache) = cache.as_mut() {
@@ -15,13 +20,22 @@ pub async fn run_chat(message: &str, mut cache: Option<&mut RedisCache>) -> Stri
         }
     }
 
-    let response = format!("Agent stub response: {}", message);
+    let task = message.to_string();
+    let queued = queue.enqueue(task.clone()).await;
+    let queued_response = match queued {
+        Ok(()) => match queue.dequeue().await {
+            Ok(Some(processed)) => format!("Processed queued task: {}", processed),
+            Ok(None) => format!("Queued task but no task was received: {}", task),
+            Err(err) => format!("Queue error: {err}"),
+        },
+        Err(err) => format!("Queue error: {err}"),
+    };
 
     if let Some(cache) = cache.as_mut() {
-        let _ = cache.set(&key, &response, 60).await;
+        let _ = cache.set(&key, &queued_response, 60).await;
     }
 
-    response
+    queued_response
 }
 
 pub struct AgentCore;

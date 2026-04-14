@@ -99,15 +99,27 @@ impl AgentCore {
     pub async fn run_agent_stream(
         prompt: &str,
         sender: mpsc::UnboundedSender<String>,
+        agents: &[AgentConfig],
     ) -> String {
         let mut conversation = format!("User: {prompt}\n");
         let mut attempts = 0;
+
+        let active_roles: Vec<String> = agents
+            .iter()
+            .map(|agent| format!("{} ({})", agent.name, agent.role))
+            .collect();
+        if !active_roles.is_empty() {
+            let _ = sender.send(format!(
+                "Agent pipeline initialized: {}",
+                active_roles.join(", "),
+            ));
+        }
 
         while attempts < 4 {
             let step = attempts + 1;
             let _ = sender.send(format!("Thinking: step {step} started"));
 
-            let query = Self::build_ollama_prompt(&conversation);
+            let query = Self::build_ollama_prompt(&conversation, agents);
             let _ = sender.send("Thinking: querying Ollama".to_string());
 
             let reply = match Self::send_to_ollama(&query).await {
@@ -171,9 +183,20 @@ impl AgentCore {
         }
     }
 
-    fn build_ollama_prompt(conversation: &str) -> String {
+    fn build_ollama_prompt(conversation: &str, agents: &[AgentConfig]) -> String {
+        let agent_descriptions: Vec<String> = agents
+            .iter()
+            .map(|agent| format!("{} as {}", agent.name, agent.role))
+            .collect();
+
+        let agent_prompt = if agent_descriptions.is_empty() {
+            "Use the default agent orchestration flow.".to_string()
+        } else {
+            format!("Use the following configured agents for orchestration: {}.", agent_descriptions.join(", "))
+        };
+
         format!(
-            "You are an agent controller that either returns a structured JSON tool call or a final answer.\n\n{conversation}\nRespond with JSON in one of these forms:\n{{\"action\":\"call_tool\",\"tool_name\":\"<tool>\",\"tool_input\":\"<input>\"}}\nor\n{{\"action\":\"final_answer\",\"answer\":\"<answer>\"}}\nDo not include any extra text outside the JSON."
+            "You are an agent controller that either returns a structured JSON tool call or a final answer. {agent_prompt}\n\n{conversation}\nRespond with JSON in one of these forms:\n{{\"action\":\"call_tool\",\"tool_name\":\"<tool>\",\"tool_input\":\"<input>\"}}\nor\n{{\"action\":\"final_answer\",\"answer\":\"<answer>\"}}\nDo not include any extra text outside the JSON."
         )
     }
 
@@ -271,5 +294,26 @@ mod tests {
             AgentAction::FinalAnswer(answer) => assert_eq!(answer, "Use the web search tool."),
             _ => panic!("Expected final answer action"),
         }
+    }
+
+    #[test]
+    fn build_ollama_prompt_includes_configured_agents() {
+        let agents = vec![
+            AgentConfig {
+                name: "planner".to_string(),
+                role: "planner".to_string(),
+                description: "Creates task plans".to_string(),
+            },
+            AgentConfig {
+                name: "executor".to_string(),
+                role: "executor".to_string(),
+                description: "Executes plans".to_string(),
+            },
+        ];
+
+        let prompt = AgentCore::build_ollama_prompt("Run this", &agents);
+        assert!(prompt.contains("planner as planner"));
+        assert!(prompt.contains("executor as executor"));
+        assert!(prompt.contains("Use the following configured agents"));
     }
 }

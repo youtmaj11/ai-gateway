@@ -63,7 +63,7 @@ pub struct AgentConfig {
     pub description: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     #[serde(default = "default_port")]
     pub port: u16,

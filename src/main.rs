@@ -48,8 +48,11 @@ async fn health_handler() -> Json<HealthResponse> {
     })
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    Extension(config): Extension<config::Config>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, config))
 }
 
 async fn chat_handler(
@@ -63,7 +66,7 @@ async fn chat_handler(
     })
 }
 
-async fn handle_socket(mut socket: WebSocket) {
+async fn handle_socket(mut socket: WebSocket, config: config::Config) {
     let span = tracing::info_span!("ws.connection");
     let _enter = span.enter();
     info!("WebSocket connection opened");
@@ -75,8 +78,9 @@ async fn handle_socket(mut socket: WebSocket) {
                 let (tx, mut rx) = mpsc::unbounded_channel();
                 let prompt = text.clone();
 
+                let agents = config.agents.clone();
                 tokio::spawn(async move {
-                    let _ = AgentCore::run_agent_stream(&prompt, tx).await;
+                    let _ = AgentCore::run_agent_stream(&prompt, tx, &agents).await;
                 });
 
                 while let Some(update) = rx.recv().await {
@@ -162,6 +166,7 @@ async fn main() {
                     .layer::<RateLimitLayer, std::convert::Infallible>(rate_limit_layer.clone())
                     .layer(JwtAuthLayer::new(config.jwt_secret.clone())),
             )
+            .layer(Extension(config.clone()))
             .layer(trace_layer);
 
         let addr = SocketAddr::from(([0, 0, 0, 0], config.port));

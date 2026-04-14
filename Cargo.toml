@@ -37,3 +37,5 @@ regorus = { version = "0.9.1", features = ["std"] }
 lapin = "2.3"
 lopdf = "0.27"
 toml = "0.8"
+age = { version = "0.9", features = ["armor"] }
+uuid = { version = "1.4", features = ["v4"] }

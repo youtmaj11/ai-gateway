@@ -33,6 +33,10 @@ fn default_rate_limit_window() -> u64 {
     60
 }
 
+fn default_encryption_key() -> Option<String> {
+    None
+}
+
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum StorageBackend {
@@ -55,6 +59,8 @@ pub struct Config {
     pub database_url: String,
     #[serde(default = "default_storage_backend")]
     pub storage_backend: StorageBackend,
+    #[serde(default = "default_encryption_key")]
+    pub encryption_key: Option<String>,
     #[serde(default = "default_queue_backend")]
     pub queue_backend: QueueBackend,
     #[serde(default = "default_string")]

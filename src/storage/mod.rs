@@ -8,6 +8,7 @@ use sqlx::Row;
 use std::{fmt, sync::Arc};
 
 use crate::config::{Config, StorageBackend};
+use crate::encryption::age::AgeEncryption;
 
 pub use postgres::PostgresStorage;
 pub use sqlite::SqliteStorage;
@@ -17,6 +18,7 @@ static GLOBAL_STORAGE: OnceCell<Arc<dyn Storage>> = OnceCell::new();
 #[derive(Debug)]
 pub enum StorageError {
     Sqlx(sqlx::Error),
+    Encryption(String),
     AlreadyInitialized,
 }
 
@@ -24,6 +26,7 @@ impl fmt::Display for StorageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             StorageError::Sqlx(err) => write!(f, "storage error: {err}"),
+            StorageError::Encryption(err) => write!(f, "storage encryption error: {err}"),
             StorageError::AlreadyInitialized => write!(f, "storage backend already initialized"),
         }
     }
@@ -49,9 +52,11 @@ pub async fn initialize_storage(config: &Config) -> Result<(), StorageError> {
 }
 
 pub async fn create_storage(config: &Config) -> Result<Arc<dyn Storage>, StorageError> {
+    let encryption = AgeEncryption::new(config.encryption_key.clone());
+
     let backend: Arc<dyn Storage> = match &config.storage_backend {
-        StorageBackend::Sqlite => Arc::new(SqliteStorage::new(&config.database_url).await?),
-        StorageBackend::Postgres => Arc::new(PostgresStorage::new(&config.database_url).await?),
+        StorageBackend::Sqlite => Arc::new(SqliteStorage::new(&config.database_url, encryption.clone()).await?),
+        StorageBackend::Postgres => Arc::new(PostgresStorage::new(&config.database_url, encryption.clone()).await?),
     };
 
     Ok(backend)
@@ -71,6 +76,12 @@ pub trait Storage: Send + Sync {
         search: &str,
         since: Option<String>,
     ) -> Result<Vec<ConversationRecord>, StorageError>;
+
+    async fn save_conversation(
+        &self,
+        user_message: &str,
+        assistant_response: &str,
+    ) -> Result<(), StorageError>;
 }
 
 impl<'r> sqlx::FromRow<'r, sqlx::postgres::PgRow> for ConversationRecord {

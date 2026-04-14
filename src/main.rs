@@ -112,7 +112,7 @@ async fn main() {
         .await
         .expect("failed to initialize storage backend");
 
-    let mut cache = if !config.redis_url.is_empty() {
+    let _cache = if !config.redis_url.is_empty() {
         match RedisCache::new(&config.redis_url).await {
             Ok(cache) => Some(cache),
             Err(err) => {
@@ -124,7 +124,7 @@ async fn main() {
         None
     };
 
-    let mut queue = if cli.server || cli.command.is_none() {
+    let _queue = if cli.server || cli.command.is_none() {
         None
     } else {
         Some(
@@ -186,11 +186,21 @@ async fn main() {
 
     match cli.command {
         Some(Commands::Chat { message }) => {
-            let queue_ref = queue.as_ref().expect("queue backend was not initialized").as_ref();
-            let spinner = CliProgress::spinner("Thinking through your request...");
-            let response = agent::core::run_chat(&message, cache.as_mut(), queue_ref).await;
-            CliProgress::done(spinner, "Chat completed");
-            println!("\n{response}");
+            let spinner = CliProgress::spinner("Starting agent thinking stream...");
+            let (tx, mut rx) = mpsc::unbounded_channel();
+            let prompt = message.clone();
+            let agents = config.agents.clone();
+
+            tokio::spawn(async move {
+                let _ = AgentCore::run_agent_stream(&prompt, tx, &agents).await;
+            });
+
+            while let Some(update) = rx.recv().await {
+                spinner.set_message(update.clone());
+                println!("{update}");
+            }
+
+            CliProgress::done(spinner, "Agent thinking stream complete");
         }
         Some(Commands::Tools { command: ToolsCommand::List }) => {
             let spinner = CliProgress::spinner("Loading available tools...");

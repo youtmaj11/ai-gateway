@@ -37,6 +37,10 @@ fn default_encryption_key() -> Option<String> {
     None
 }
 
+fn default_agents() -> Vec<AgentConfig> {
+    Vec::new()
+}
+
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum StorageBackend {
@@ -51,6 +55,14 @@ pub enum QueueBackend {
     RabbitMQ,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct AgentConfig {
+    pub name: String,
+    pub role: String,
+    #[serde(default = "default_string")]
+    pub description: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default = "default_port")]
@@ -61,6 +73,8 @@ pub struct Config {
     pub storage_backend: StorageBackend,
     #[serde(default = "default_encryption_key")]
     pub encryption_key: Option<String>,
+    #[serde(default = "default_agents")]
+    pub agents: Vec<AgentConfig>,
     #[serde(default = "default_queue_backend")]
     pub queue_backend: QueueBackend,
     #[serde(default = "default_string")]

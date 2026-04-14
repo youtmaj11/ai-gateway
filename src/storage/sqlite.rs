@@ -1,17 +1,17 @@
 use async_trait::async_trait;
 use crate::encryption::age::AgeEncryption;
 use crate::storage::{ConversationRecord, Storage, StorageError};
-use sqlx::postgres::{PgPool, PgPoolOptions};
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use uuid::Uuid;
 
-pub struct PostgresStorage {
-    pool: PgPool,
+pub struct SqliteStorage {
+    pool: SqlitePool,
     encryption: AgeEncryption,
 }
 
-impl PostgresStorage {
+impl SqliteStorage {
     pub async fn new(database_url: &str, encryption: AgeEncryption) -> Result<Self, StorageError> {
-        let pool = PgPoolOptions::new()
+        let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect(database_url)
             .await?;
@@ -21,18 +21,18 @@ impl PostgresStorage {
 }
 
 #[async_trait]
-impl Storage for PostgresStorage {
+impl Storage for SqliteStorage {
     async fn query_history(
         &self,
         search: &str,
         since: Option<String>,
     ) -> Result<Vec<ConversationRecord>, StorageError> {
         let mut query = String::from(
-            "SELECT user_message, assistant_response, created_at::text AS created_at FROM conversations",
+            "SELECT user_message, assistant_response, created_at FROM conversations",
         );
 
         if since.is_some() {
-            query.push_str(" WHERE created_at >= $1");
+            query.push_str(" WHERE created_at >= ?1");
         }
 
         query.push_str(" ORDER BY created_at DESC");
@@ -79,12 +79,12 @@ impl Storage for PostgresStorage {
             .map_err(|err| StorageError::Encryption(err.to_string()))?;
         let encrypted_assistant_response = self.encryption.encrypt(assistant_response)
             .map_err(|err| StorageError::Encryption(err.to_string()))?;
-        let id = Uuid::new_v4();
+        let id = Uuid::new_v4().to_string();
 
         sqlx::query(
-            "INSERT INTO conversations (id, user_message, assistant_response, created_at) VALUES ($1, $2, $3, now())",
+            "INSERT INTO conversations (id, user_message, assistant_response, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
         )
-        .bind(id.to_string())
+        .bind(id)
         .bind(encrypted_user_message)
         .bind(encrypted_assistant_response)
         .execute(&self.pool)

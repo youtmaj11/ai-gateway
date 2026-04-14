@@ -1,7 +1,10 @@
 # Example configuration for ai-gateway
 
 port = 8080
-database_url = "postgres://user:password@localhost:5432/ai_gateway"
+storage_backend = "sqlite"
+encryption_key = ""
+queue_backend = "in_memory"
+database_url = "sqlite:ai_gateway.db"
 redis_url = "redis://localhost:6379"
 jwt_secret = "your_jwt_secret_here"
 rabbitmq_url = "amqp://guest:guest@localhost:5672"

@@ -2,6 +2,7 @@ mod agent;
 mod auth;
 mod cli;
 mod config;
+mod encryption;
 mod middleware;
 mod observability;
 mod policy;
@@ -103,6 +104,10 @@ async fn main() {
     let cli = Cli::parse_args();
     let config = config::Config::from_file(&cli.config).expect("failed to load configuration");
 
+    storage::initialize_storage(&config)
+        .await
+        .expect("failed to initialize storage backend");
+
     let mut cache = if !config.redis_url.is_empty() {
         match RedisCache::new(&config.redis_url).await {
             Ok(cache) => Some(cache),
@@ -113,6 +118,16 @@ async fn main() {
         }
     } else {
         None
+    };
+
+    let mut queue = if cli.server || cli.command.is_none() {
+        None
+    } else {
+        Some(
+            queue::create_queue(&config)
+                .await
+                .expect("failed to initialize queue backend"),
+        )
     };
 
     if cli.server || cli.command.is_none() {
@@ -166,7 +181,8 @@ async fn main() {
 
     match cli.command {
         Some(Commands::Chat { message }) => {
-            let response = agent::core::run_chat(&message, cache.as_mut()).await;
+            let queue_ref = queue.as_ref().expect("queue backend was not initialized").as_ref();
+            let response = agent::core::run_chat(&message, cache.as_mut(), queue_ref).await;
             println!("{response}");
         }
         Some(Commands::Tools { command: ToolsCommand::List }) => {

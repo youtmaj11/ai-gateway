@@ -1,26 +1,5 @@
 use lapin::{options::{BasicPublishOptions, QueueDeclareOptions}, types::FieldTable, BasicProperties, Channel, Connection, ConnectionProperties};
-use std::fmt;
-
-#[derive(Debug)]
-pub enum QueueError {
-    Lapin(lapin::Error),
-}
-
-impl fmt::Display for QueueError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            QueueError::Lapin(err) => write!(f, "RabbitMQ error: {err}"),
-        }
-    }
-}
-
-impl std::error::Error for QueueError {}
-
-impl From<lapin::Error> for QueueError {
-    fn from(error: lapin::Error) -> Self {
-        QueueError::Lapin(error)
-    }
-}
+use crate::queue::QueueError;
 
 pub struct RabbitProducer {
     channel: Channel,

@@ -13,6 +13,10 @@ fn default_storage_backend() -> StorageBackend {
     StorageBackend::Sqlite
 }
 
+fn default_queue_backend() -> QueueBackend {
+    QueueBackend::InMemory
+}
+
 fn default_string() -> String {
     String::new()
 }
@@ -36,6 +40,13 @@ pub enum StorageBackend {
     Postgres,
 }
 
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum QueueBackend {
+    InMemory,
+    RabbitMQ,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default = "default_port")]
@@ -44,6 +55,8 @@ pub struct Config {
     pub database_url: String,
     #[serde(default = "default_storage_backend")]
     pub storage_backend: StorageBackend,
+    #[serde(default = "default_queue_backend")]
+    pub queue_backend: QueueBackend,
     #[serde(default = "default_string")]
     pub redis_url: String,
     #[serde(default = "default_string")]

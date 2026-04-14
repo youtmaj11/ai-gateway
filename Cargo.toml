@@ -12,7 +12,7 @@ repository = "https://github.com/youtmaj11/ai-gateway"
 
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "net", "sync", "time", "process"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["trace"] }
 clap = { version = "4.5", features = ["derive"] }
@@ -45,6 +45,12 @@ rand_core = "0.6"
 tokio-postgres = { version = "0.7", features = ["with-uuid-0_8"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1.4", features = ["v4"] }
+
+[profile.release]
+opt-level = "z"
+codegen-units = 1
+lto = true
+panic = "abort"
 
 [dev-dependencies]
 assert_cmd = "2.0"
